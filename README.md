@@ -4,7 +4,7 @@ A demo analytics dashboard for an Amazon seller, built by [Mani Technology](http
 
 All data is synthetic. It is generated for a fictional brand ("Demo Brand") and shaped like real Amazon SP-API and Amazon Ads v3 reports, so a real connector could replace the generator later.
 
-> **Status:** in development. The data generator and raw load are in place; the data models, export and dashboard pages arrive in the next pull requests. Live demo: demo.manitechnology.com (coming soon).
+> **Status:** in development. The data pipeline is complete (generator, raw load, staging and marts, JSON export); the dashboard pages arrive in the next pull requests. Live demo: demo.manitechnology.com (coming soon).
 
 ## How it works
 
@@ -22,6 +22,8 @@ PostgreSQL only runs at build time, on your machine or in GitHub Actions. The li
 | `pipeline/` | Python project (uv): data generator, database load, SQL models, JSON export, pytest tests |
 | `pipeline/generator/` | Synthetic data for the fictional Demo Brand, written as Amazon-shaped report files |
 | `pipeline/load.py` | Loads the report files into the `raw` schema |
+| `pipeline/models.py` | Builds the `staging` views and `marts` tables from `pipeline/sql/` |
+| `pipeline/export.py` | Writes the marts as JSON files to `web/public/data/` (git-ignored) |
 | `pipeline/sql/` | SQL scripts for the `raw`, `staging` and `marts` schemas |
 | `web/` | React + TypeScript app (Vite, Tailwind CSS), Vitest tests |
 | `docs/` | Metric definitions and project documentation |
@@ -34,7 +36,7 @@ You need Docker, [uv](https://docs.astral.sh/uv/) and Node.js 22.
 ```bash
 make install   # Python and web dependencies
 make db        # start PostgreSQL 16 in Docker
-make data      # generate a year of synthetic data and load it into PostgreSQL
+make data      # generate a year of data, load PostgreSQL, build marts, export JSON
 make dev       # run the web app at http://localhost:5173
 ```
 
@@ -56,6 +58,18 @@ The pipeline reads `DATABASE_URL` (see `.env.example`); the default matches `doc
 The data includes a weekly pattern, a Q4 peak, a January dip, Prime Day and Black Friday spikes with deal prices, two product launches, three stockouts caused by late shipments, and a few keywords that spend without selling. Ads stop serving while a product is out of stock. Campaign, targeting and advertised-product reports add up to the same totals, and ad orders never exceed total orders.
 
 Each file is loaded into the `raw` schema unchanged (one JSON record per row, with Amazon's own field names), so a real SP-API or Ads connector could load the same tables.
+
+## Data model
+
+| Schema | What it holds |
+| --- | --- |
+| `raw` | One row per report record, stored as received (JSON with Amazon's field names) |
+| `staging` | Views that type and rename each report (`stg_*`) and keep only the newest copy of a record that was loaded twice |
+| `marts` | `dim_date`, `dim_product`, `dim_campaign`, `dim_target`; daily facts `fct_sales_daily`, `fct_ads_campaign_daily`, `fct_ads_target_daily`, `fct_ads_product_daily`, `fct_inventory_daily` |
+
+Product-level ad spend covers Sponsored Products and Sponsored Display only, because Amazon reports Sponsored Brands spend per campaign. Account totals include all three ad types.
+
+The export writes one compact JSON file per mart (one array per field; Amazon IDs as strings) plus `manifest.json` with the data's date range. The dashboard's first load is about 140 KB compressed.
 
 ## Metrics
 

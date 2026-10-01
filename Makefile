@@ -3,7 +3,7 @@
 help:
 	@echo "make install   Install Python and web dependencies"
 	@echo "make db        Start PostgreSQL 16 in Docker"
-	@echo "make data      Generate synthetic Amazon reports and load them into PostgreSQL"
+	@echo "make data      Generate data, load PostgreSQL, build marts, export JSON for the web app"
 	@echo "make dev       Run the web app locally"
 	@echo "make test      Run pytest and Vitest"
 	@echo "make lint      Run ruff, ESLint and Prettier checks"
@@ -22,6 +22,8 @@ db-down:
 data:
 	cd pipeline && uv run python -m generator --out output
 	cd pipeline && uv run python load.py --src output
+	cd pipeline && uv run python models.py
+	cd pipeline && uv run python export.py
 
 dev:
 	cd web && npm run dev
