@@ -1,0 +1,32 @@
+[project]
+name = "asad-pipeline"
+version = "0.1.0"
+description = "Synthetic Amazon seller data, PostgreSQL models and JSON export for the Amazon Seller Analytics Dashboard demo."
+readme = "../README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Proprietary. All rights reserved." }
+dependencies = [
+    "numpy>=2.1",
+    "pandas>=2.2",
+    "psycopg[binary]>=3.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.7",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
