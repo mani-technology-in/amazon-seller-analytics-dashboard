@@ -123,8 +123,12 @@ def simulate(rng: np.random.Generator, catalog: Catalog) -> Simulation:
     deal_boost = np.where(deal_cells, 1.4, 1.0)
 
     # --- Advertising, before stock limits -------------------------------------------------
+    months = np.array([d.month for d in days])
+    intensity = np.array([config.AD_INTENSITY_BY_MONTH.get(m, 1.0) for m in months])
+    cpc_factor = np.array([config.CPC_BY_MONTH.get(m, 1.0) for m in months])
     ads = [
-        _simulate_campaign(rng, c, catalog, season, launch, price_cents) for c in catalog.campaigns
+        _simulate_campaign(rng, c, catalog, season * intensity, cpc_factor, launch, price_cents)
+        for c in catalog.campaigns
     ]
 
     ad_orders = np.zeros((n_products, n_days), dtype=np.int64)
@@ -194,7 +198,8 @@ def simulate(rng: np.random.Generator, catalog: Catalog) -> Simulation:
     )
 
 
-def _simulate_campaign(rng, campaign, catalog, season, launch, price_cents) -> AdCells:
+def _simulate_campaign(rng, campaign, catalog, season, cpc_factor, launch, price_cents) -> AdCells:
+    """`season` here already includes the monthly ad budget pattern."""
     idx = np.array([catalog.product(asin).index for asin in campaign.asins])
     n_targets, n_products, n_days = len(campaign.targets), len(idx), season.shape[0]
     base = np.array([catalog.products[i].base_daily_units for i in idx])
@@ -218,7 +223,8 @@ def _simulate_campaign(rng, campaign, catalog, season, launch, price_cents) -> A
 
     clicks = rng.binomial(impressions, np.clip(t_ctr, 0, 1)[:, None, None])
     cpc_noise = rng.lognormal(0, 0.08, size=clicks.shape)
-    cost_cents = np.round(clicks * t_cpc[:, None, None] * cpc_noise * 100).astype(np.int64)
+    cpc = t_cpc[:, None, None] * cpc_factor[None, None, :] * cpc_noise
+    cost_cents = np.round(clicks * cpc * 100).astype(np.int64)
     orders = rng.binomial(clicks, np.clip(t_cvr, 0, 1)[:, None, None])
     units = orders + rng.binomial(orders, config.UNITS_PER_ORDER_EXTRA)
     sales_cents = units * price_cents[idx][None, :, :]

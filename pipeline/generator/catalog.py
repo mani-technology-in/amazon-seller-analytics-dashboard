@@ -231,15 +231,21 @@ def _days(rng: np.random.Generator, lo: int, hi: int) -> timedelta:
 
 def _target(rng, text, match_type, imp, ctr, cpc, cvr, wasted=False) -> Target:
     noise = rng.lognormal(0, 0.35)
-    return Target(
+    t = Target(
         target_id=_amazon_id(rng),
         text=text,
         match_type=match_type,
-        impressions_per_day=float(imp * noise),
+        impressions_per_day=float(imp * noise * (config.WASTED_TRAFFIC_FACTOR if wasted else 1)),
         ctr=float(ctr * rng.lognormal(0, 0.2)),
         cpc=float(cpc * rng.lognormal(0, 0.15)),
         cvr=0.0 if wasted else float(cvr * rng.lognormal(0, 0.2)),
     )
+    if wasted:
+        # keep a non-converting target to a believable size: at most ~$600 a year
+        yearly = t.impressions_per_day * t.ctr * t.cpc * 365
+        if yearly > config.WASTED_MAX_YEARLY_SPEND:
+            t.impressions_per_day *= config.WASTED_MAX_YEARLY_SPEND / yearly
+    return t
 
 
 def build_campaigns(rng: np.random.Generator, products: list[Product]) -> list[Campaign]:
@@ -275,9 +281,8 @@ def build_campaigns(rng: np.random.Generator, products: list[Product]) -> list[C
         for kw in KEYWORDS[cat]:
             for match in ("EXACT", "PHRASE"):
                 imp = 700 if match == "EXACT" else 1100
-                manual.targets.append(
-                    _target(rng, kw, match, imp, 0.005, 1.05, 0.11, wasted=wasted())
-                )
+                waste = wasted() if match == "PHRASE" else False
+                manual.targets.append(_target(rng, kw, match, imp, 0.005, 1.05, 0.11, waste))
         for kw in KEYWORDS[cat][:4]:
             manual.targets.append(_target(rng, kw, "BROAD", 1500, 0.003, 0.95, 0.08, wasted()))
 
