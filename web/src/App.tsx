@@ -1,29 +1,48 @@
-const PAGES = ['Overview', 'Advertising', 'Products', 'Inventory'] as const
+import { lazy } from 'react'
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { DataSourceProvider } from './app/data'
+import { Layout, PageTitle } from './components/Layout'
+import type { DataSource } from './data/dataSource'
 
-function App() {
+// Each page loads its own code, so the first visit downloads only what it shows.
+const OverviewPage = lazy(() =>
+  import('./pages/OverviewPage').then((m) => ({ default: m.OverviewPage })),
+)
+const AdvertisingPage = lazy(() =>
+  import('./pages/AdvertisingPage').then((m) => ({ default: m.AdvertisingPage })),
+)
+const ProductsPage = lazy(() =>
+  import('./pages/ProductsPage').then((m) => ({ default: m.ProductsPage })),
+)
+const ProductDetailPage = lazy(() =>
+  import('./pages/ProductsPage').then((m) => ({ default: m.ProductDetailPage })),
+)
+const InventoryPage = lazy(() =>
+  import('./pages/InventoryPage').then((m) => ({ default: m.InventoryPage })),
+)
+
+export function AppRoutes() {
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4">
-          <h1 className="text-lg font-semibold">Amazon Seller Analytics Dashboard</h1>
-          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-900">
-            Synthetic demo data
-          </span>
-        </div>
-        <nav aria-label="Pages" className="mx-auto flex max-w-6xl gap-4 px-4 pb-3 text-sm">
-          {PAGES.map((page) => (
-            <span key={page} className="text-slate-500">
-              {page}
-            </span>
-          ))}
-        </nav>
-      </header>
-      <main className="mx-auto max-w-6xl px-4 py-10">
-        <p className="text-slate-600">
-          Project scaffold. The dashboard pages are built in later pull requests.
-        </p>
-      </main>
-    </div>
+    <Routes>
+      <Route element={<Layout />}>
+        <Route index element={<OverviewPage />} />
+        <Route path="advertising" element={<AdvertisingPage />} />
+        <Route path="products" element={<ProductsPage />} />
+        <Route path="products/:asin" element={<ProductDetailPage />} />
+        <Route path="inventory" element={<InventoryPage />} />
+        <Route path="*" element={<PageTitle title="Page not found" />} />
+      </Route>
+    </Routes>
+  )
+}
+
+function App({ source }: { source?: DataSource }) {
+  return (
+    <DataSourceProvider source={source}>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </DataSourceProvider>
   )
 }
 
