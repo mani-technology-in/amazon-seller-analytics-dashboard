@@ -1,0 +1,125 @@
+name: Deploy
+
+# Called by CI after the pipeline, web and parity jobs pass.
+#   pull request -> a preview at https://pr-<number>.<project>.pages.dev
+#   main         -> production (the live demo)
+# Needs the repository secrets CLOUDFLARE_API_TOKEN (Account > Cloudflare Pages > Edit) and
+# CLOUDFLARE_ACCOUNT_ID.
+
+on:
+  workflow_call:
+    inputs:
+      branch:
+        description: Cloudflare Pages branch ("main" is production; anything else is a preview)
+        required: true
+        type: string
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        required: true
+      CLOUDFLARE_ACCOUNT_ID:
+        required: true
+    outputs:
+      url:
+        description: URL of this deployment
+        value: ${{ jobs.deploy.outputs.url }}
+
+permissions:
+  contents: read
+
+env:
+  PAGES_PROJECT: amazon-seller-analytics-demo
+
+jobs:
+  deploy:
+    name: Build, smoke test, deploy (${{ inputs.branch }})
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages-${{ inputs.branch }}
+      cancel-in-progress: ${{ inputs.branch != 'main' }}
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: asad
+          POSTGRES_PASSWORD: asad
+          POSTGRES_DB: asad
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U asad -d asad"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      DATABASE_URL: postgresql://asad:asad@localhost:5432/asad
+    outputs:
+      url: ${{ steps.deploy.outputs.deployment-url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: make install
+      - name: Build data (generate, load, models, export)
+        run: make data
+      - name: Build the site
+        working-directory: web
+        run: npm run build
+
+      - name: Install Chromium for the smoke test
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: Smoke test the build
+        working-directory: web
+        run: npm run smoke
+
+      - name: Create the Pages project if it does not exist
+        working-directory: web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if npx --yes wrangler@4 pages project list | grep -q "$PAGES_PROJECT"; then
+            echo "Project $PAGES_PROJECT exists"
+          else
+            npx --yes wrangler@4 pages project create "$PAGES_PROJECT" --production-branch=main
+          fi
+
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4"
+          workingDirectory: web
+          command: pages deploy dist --project-name=${{ env.PAGES_PROJECT }} --branch=${{ inputs.branch }} --commit-dirty=true
+
+      - name: Smoke test the deployed site
+        working-directory: web
+        env:
+          SMOKE_BASE_URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          echo "Checking $SMOKE_BASE_URL"
+          for path in / /data/manifest.json /inventory /products/does-not-exist; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$SMOKE_BASE_URL$path")
+            echo "$path -> $code"
+            test "$code" = "200"
+          done
+          npm run smoke
+
+      - name: Summary
+        run: |
+          {
+            echo "### Deployed (${{ inputs.branch }})"
+            echo ""
+            echo "- This deployment: ${{ steps.deploy.outputs.deployment-url }}"
+            echo "- Branch alias: ${{ steps.deploy.outputs.pages-deployment-alias-url }}"
+          } >> "$GITHUB_STEP_SUMMARY"
