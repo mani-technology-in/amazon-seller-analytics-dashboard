@@ -45,6 +45,15 @@ STOCKOUT_DELAY_DAYS = (24, 30)
 LAUNCHES = ((18, date(2026, 3, 16)), (37, date(2026, 6, 1)))
 LAUNCH_RAMP_DAYS = 30
 
-# Ads: share of targets that spend but never convert, so the "spend with no sales" flag has
-# something to find.
-WASTED_TARGET_SHARE = 0.08
+# Ads: some broad, phrase and display targets spend but never convert, so the "spend with no
+# sales" flag has something to find. Exact-match keywords are never picked: a real exact match on
+# the brand's own product would sell. These targets get little traffic, so each spends a few
+# hundred dollars a year, the size a seller might overlook.
+WASTED_TARGET_SHARE = 0.10
+WASTED_TRAFFIC_FACTOR = 0.2
+WASTED_MAX_YEARLY_SPEND = 550.0  # USD, before seasonality and Q4 CPC increases
+
+# Ad budget pattern by month (1 = normal). Sellers push ads in Q4 and around Prime Day and cut
+# back in January, and clicks cost more in busy months, so TACoS moves through the year.
+AD_INTENSITY_BY_MONTH = {1: 0.70, 2: 0.85, 7: 1.20, 11: 1.30, 12: 1.35}
+CPC_BY_MONTH = {7: 1.05, 11: 1.10, 12: 1.12}
