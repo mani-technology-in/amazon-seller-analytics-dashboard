@@ -89,6 +89,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://asad:asad@localhost:5432/asad
       PARITY_FIXTURE: ${{ github.workspace }}/pipeline/output/parity.json
+      REQUIRE_PARITY: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6

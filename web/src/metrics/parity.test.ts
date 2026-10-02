@@ -33,6 +33,11 @@ const FIXTURE =
   process.env.PARITY_FIXTURE ?? resolve(__dirname, '../../../pipeline/output/parity.json')
 const available = existsSync(FIXTURE) && existsSync(resolve(DATA_DIR, 'manifest.json'))
 
+// In CI (REQUIRE_PARITY=1) a missing fixture or data file is a failure, never a silent skip.
+if (process.env.REQUIRE_PARITY === '1' && !available) {
+  throw new Error(`Parity inputs missing: fixture ${FIXTURE}, data ${DATA_DIR}`)
+}
+
 const read = <T>(name: string): T => JSON.parse(readFileSync(resolve(DATA_DIR, name), 'utf-8'))
 
 type Num = number | null
