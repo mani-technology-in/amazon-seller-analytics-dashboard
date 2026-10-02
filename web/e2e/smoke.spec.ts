@@ -1,3 +1,4 @@
+import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 
 /**
@@ -70,6 +71,27 @@ test('filters live in the URL and change what is shown', async ({ page }) => {
 
   await page.getByLabel('Date range').selectOption('last7')
   await expect(page).toHaveURL(/preset=last7/)
+})
+
+test('dates with no data fall back to the default range and say so', async ({ page }) => {
+  await page.goto('/?preset=custom&from=2024-01-01&to=2024-01-31')
+  await expect(page.getByRole('note')).toContainText('The chosen dates have no data')
+  await expect(page.getByText(/^1 Sep 2026 – 30 Sep 2026$/)).toBeVisible()
+})
+
+test('every page passes an automated accessibility check (WCAG 2.1 AA)', async ({ page }) => {
+  for (const path of ['/', '/advertising', '/products', '/inventory']) {
+    await page.goto(path)
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await expect(page.getByRole('status')).toHaveCount(0)
+    const { violations } = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze()
+    expect(
+      violations.map((v) => `${v.id}: ${v.help} (${v.nodes.length})`),
+      path,
+    ).toEqual([])
+  }
 })
 
 test('a table exports CSV', async ({ page }) => {

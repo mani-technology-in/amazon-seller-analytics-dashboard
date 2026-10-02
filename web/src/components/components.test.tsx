@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as csv from '../lib/csv'
 import { DataTable, type Column } from './DataTable'
 import { KpiTile } from './KpiTile'
+import { FilterBar } from './FilterBar'
+import { parseFilters } from '../app/filters'
 
 afterEach(cleanup)
 
@@ -79,5 +81,29 @@ describe('KpiTile (FR-2, FR-5)', () => {
   it('says when there is no comparison', () => {
     render(<KpiTile label="Sales" value="$1" current={1} previous={null} better="up" />)
     expect(screen.getByText('No comparison')).toBeInTheDocument()
+  })
+})
+
+describe('FilterBar (FR-1)', () => {
+  const show = (q: string) =>
+    render(
+      <FilterBar
+        filters={parseFilters(new URLSearchParams(q), '2025-10-01', '2026-09-30')}
+        update={() => {}}
+        dataStart="2025-10-01"
+        dataEnd="2026-09-30"
+      />,
+    )
+
+  it('says when chosen dates have no data', () => {
+    show('preset=custom&from=2024-01-01&to=2024-01-31')
+    expect(screen.getByRole('note')).toHaveTextContent(
+      'The chosen dates have no data, so the default range is shown. Data covers 1 Oct 2025 – 30 Sep 2026.',
+    )
+  })
+
+  it('says nothing for an ordinary range', () => {
+    show('preset=custom&from=2025-11-01&to=2025-12-31')
+    expect(screen.queryByRole('note')).toBeNull()
   })
 })

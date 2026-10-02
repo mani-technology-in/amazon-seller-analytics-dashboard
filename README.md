@@ -65,7 +65,7 @@ make dev       # run the web app at http://localhost:5173
 
 Other commands: `make test` (pytest and Vitest), `make parity` (web metrics against SQL, after `make data`), `make smoke` (production build plus a Playwright browser test of every page), `make lint` (ruff, ESLint, Prettier, TypeScript) and `make format`.
 
-For `make smoke` the first time, install a browser with `cd web && npx playwright install chromium`.
+For `make smoke` the first time, install the browsers with `cd web && npx playwright install chromium firefox webkit` (or run one engine with `cd web && npx playwright test --project=chromium`).
 
 The pipeline reads `DATABASE_URL` (see `.env.example`); the default matches `docker-compose.yml`.
 
@@ -78,7 +78,7 @@ Every push and pull request runs four GitHub Actions jobs:
 | Pipeline | ruff, then pytest against PostgreSQL 16: repeatable data, Amazon report formats, reconciliation from raw to marts, export size |
 | Web | ESLint, Prettier, TypeScript, Vitest unit and component tests, production build |
 | Parity | Rebuilds the data and checks every dashboard metric against the same metric computed in SQL |
-| Deploy | Runs only when the three above pass. Builds data and site, runs the Playwright smoke test, deploys to Cloudflare Pages, then runs the smoke test again against the deployed URL |
+| Deploy | Runs only when the three above pass. Builds data and site, runs the Playwright smoke test in Chromium, Firefox and WebKit (desktop, Android and iPhone sizes, plus an accessibility check), deploys to Cloudflare Pages, then runs the smoke test again against the deployed URL |
 
 Pull requests deploy to a preview (`https://pr-<number>.<project>.pages.dev`); merges to `main` deploy the live demo. Deployment needs two repository secrets: `CLOUDFLARE_API_TOKEN` (permission: Account → Cloudflare Pages → Edit) and `CLOUDFLARE_ACCOUNT_ID`. The site is static, so hosting is free and nothing sleeps.
 
@@ -107,7 +107,7 @@ Each file is loaded into the `raw` schema unchanged (one JSON record per row, wi
 
 Product-level ad spend covers Sponsored Products and Sponsored Display only, because Amazon reports Sponsored Brands spend per campaign. Account totals include all three ad types.
 
-The export writes one compact JSON file per mart (one array per field; Amazon IDs as strings) plus `manifest.json` with the data's date range. The dashboard's first load is about 140 KB compressed.
+The export writes one compact JSON file per mart (one array per field; Amazon IDs as strings) plus `manifest.json` with the data's date range. Opening a page downloads about 230–550 KB compressed (code plus that page's data), measured with Playwright against a production build; the Advertising page is the largest because of the daily keyword data.
 
 ## Metrics
 

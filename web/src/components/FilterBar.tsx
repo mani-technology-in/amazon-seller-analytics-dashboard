@@ -108,6 +108,14 @@ export function FilterBar({
             <div className="font-medium text-slate-900">
               {dateLong(range.start)} – {dateLong(range.end)}
             </div>
+            {filters.rangeAdjusted ? (
+              <p role="note" className="mt-1 text-amber-800">
+                {filters.rangeAdjusted === 'outside'
+                  ? 'The chosen dates have no data, so the default range is shown.'
+                  : 'Dates adjusted to the data available.'}{' '}
+                Data covers {dateLong(dataStart)} – {dateLong(dataEnd)}.
+              </p>
+            ) : null}
             {showCompare ? (
               <label className="mt-1 flex items-center gap-1.5">
                 <input

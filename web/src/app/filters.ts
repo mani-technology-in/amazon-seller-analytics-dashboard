@@ -30,6 +30,8 @@ export interface Filters {
   campaignId: string | null
   targetAcos: number // fraction, e.g. 0.3
   lowStockDays: number
+  /** Set when a custom range from the URL had to change: wholly outside the data, or trimmed to it. */
+  rangeAdjusted: 'outside' | 'trimmed' | null
 }
 
 const AD_PRODUCTS: AdProduct[] = ['SP', 'SB', 'SD']
@@ -53,8 +55,16 @@ export function parseFilters(
   const to = params.get('to')
 
   let range: DateRange
-  if (preset === 'custom' && isDate(from) && isDate(to)) {
-    range = clampRange({ start: from, end: to }, dataStart, dataEnd)
+  let rangeAdjusted: Filters['rangeAdjusted'] = null
+  const [lo, hi] = isDate(from) && isDate(to) ? (from <= to ? [from, to] : [to, from]) : []
+  if (preset === 'custom' && lo && hi && (hi < dataStart || lo > dataEnd)) {
+    // Nothing to show for these dates: use the default range and say why.
+    preset = DEFAULT_PRESET
+    range = presetRange(DEFAULT_PRESET as Exclude<PresetId, 'custom'>, dataEnd)
+    rangeAdjusted = 'outside'
+  } else if (preset === 'custom' && lo && hi) {
+    range = clampRange({ start: lo, end: hi }, dataStart, dataEnd)
+    if (range.start !== lo || range.end !== hi) rangeAdjusted = 'trimmed'
   } else {
     if (preset === 'custom') preset = DEFAULT_PRESET
     range = presetRange(preset as Exclude<PresetId, 'custom'>, dataEnd)
@@ -74,6 +84,7 @@ export function parseFilters(
     campaignId: params.get('campaign') || null,
     targetAcos: bounded(params.get('acos'), DEFAULT_TARGET_ACOS * 100, 1, 200) / 100,
     lowStockDays: bounded(params.get('lowstock'), DEFAULT_LOW_STOCK_DAYS, 1, 365),
+    rangeAdjusted,
   }
 }
 

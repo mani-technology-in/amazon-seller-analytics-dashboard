@@ -68,7 +68,7 @@ export function Layout() {
           </Suspense>
         )}
       </main>
-      <footer className="mx-auto max-w-7xl px-4 pb-8 text-xs text-slate-500">
+      <footer className="mx-auto max-w-7xl px-4 pb-8 text-xs text-slate-600">
         A demo by{' '}
         <a className="underline hover:text-slate-900" href="https://manitechnology.com">
           Mani Technology
