@@ -28,6 +28,8 @@ permissions:
 
 env:
   PAGES_PROJECT: amazon-seller-analytics-demo
+  # The custom domain, set up in the Cloudflare dashboard (Pages project > Custom domains).
+  PRODUCTION_URL: https://demo.manitechnology.com
 
 jobs:
   deploy:
@@ -119,6 +121,30 @@ jobs:
           done
           npm run smoke
 
+      - name: Smoke test the custom domain (production only)
+        if: inputs.branch == 'main'
+        working-directory: web
+        env:
+          SMOKE_BASE_URL: ${{ env.PRODUCTION_URL }}
+        run: |
+          # The custom domain serves the newest production deployment once Cloudflare has
+          # switched over; wait until it serves this build's data before checking it.
+          expected=$(python3 -c "import json;print(json.load(open('dist/data/manifest.json'))['generatedAt'])")
+          for i in $(seq 1 30); do
+            live=$(curl -sS --max-time 15 "$SMOKE_BASE_URL/data/manifest.json" \
+              | python3 -c "import json,sys;print(json.load(sys.stdin)['generatedAt'])" || true)
+            [ "$live" = "$expected" ] && break
+            echo "Waiting for $SMOKE_BASE_URL to serve this build ($live != $expected)"
+            sleep 10
+          done
+          test "$live" = "$expected"
+          for path in / /data/manifest.json /inventory /products/does-not-exist; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --retry 5 --retry-delay 5 "$SMOKE_BASE_URL$path")
+            echo "$path -> $code"
+            test "$code" = "200"
+          done
+          npm run smoke
+
       - name: Summary
         run: |
           {
@@ -126,4 +152,5 @@ jobs:
             echo ""
             echo "- This deployment: ${{ steps.deploy.outputs.deployment-url }}"
             echo "- Branch alias: ${{ steps.deploy.outputs.pages-deployment-alias-url }}"
+            if [ "${{ inputs.branch }}" = "main" ]; then echo "- Live demo: $PRODUCTION_URL"; fi
           } >> "$GITHUB_STEP_SUMMARY"
