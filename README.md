@@ -4,7 +4,7 @@ A demo analytics dashboard for an Amazon seller, built by [Mani Technology](http
 
 All data is synthetic. It is generated for a fictional brand ("Demo Brand") and shaped like real Amazon SP-API and Amazon Ads v3 reports, so a real connector could replace the generator later.
 
-> **Status:** in development. The data pipeline is complete (generator, raw load, staging and marts, JSON export); the dashboard pages arrive in the next pull requests. Live demo: demo.manitechnology.com (coming soon).
+> **Status:** in development. The data pipeline and the web app's data layer and metrics are complete; the dashboard pages arrive in the next pull request. Live demo: demo.manitechnology.com (coming soon).
 
 ## How it works
 
@@ -26,6 +26,9 @@ PostgreSQL only runs at build time, on your machine or in GitHub Actions. The li
 | `pipeline/export.py` | Writes the marts as JSON files to `web/public/data/` (git-ignored) |
 | `pipeline/sql/` | SQL scripts for the `raw`, `staging` and `marts` schemas |
 | `web/` | React + TypeScript app (Vite, Tailwind CSS), Vitest tests |
+| `web/src/data/` | `DataSource` interface and the static JSON version the demo uses |
+| `web/src/metrics/` | Date ranges and every metric the dashboard shows, with unit and parity tests |
+| `pipeline/parity.py` | The same metrics computed in SQL, for the parity check |
 | `docs/` | Metric definitions and project documentation |
 | `.github/workflows/` | CI: lint, format check, type check, tests and build on every push and pull request |
 
@@ -40,7 +43,7 @@ make data      # generate a year of data, load PostgreSQL, build marts, export J
 make dev       # run the web app at http://localhost:5173
 ```
 
-Other commands: `make test` (pytest and Vitest), `make lint` (ruff, ESLint, Prettier, TypeScript) and `make format`.
+Other commands: `make test` (pytest and Vitest), `make parity` (web metrics against SQL, after `make data`), `make lint` (ruff, ESLint, Prettier, TypeScript) and `make format`.
 
 The pipeline reads `DATABASE_URL` (see `.env.example`); the default matches `docker-compose.yml`.
 
@@ -73,7 +76,7 @@ The export writes one compact JSON file per mart (one array per field; Amazon ID
 
 ## Metrics
 
-See [docs/metric-definitions.md](docs/metric-definitions.md).
+See [docs/metric-definitions.md](docs/metric-definitions.md). Every metric is computed twice: in TypeScript for the dashboard (`web/src/metrics/metrics.ts`) and in SQL (`pipeline/parity.py`). CI checks they agree for every campaign, keyword, product and inventory row over six fixed date ranges, so every number on screen traces back to the database.
 
 ## Licence
 

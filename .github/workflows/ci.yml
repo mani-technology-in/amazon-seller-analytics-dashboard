@@ -68,3 +68,45 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+
+  parity:
+    name: Parity (SQL metrics = TypeScript metrics)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: asad
+          POSTGRES_PASSWORD: asad
+          POSTGRES_DB: asad
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U asad -d asad"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      DATABASE_URL: postgresql://asad:asad@localhost:5432/asad
+      PARITY_FIXTURE: ${{ github.workspace }}/pipeline/output/parity.json
+      REQUIRE_PARITY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install
+        run: make install
+      - name: Build data (generate, load, models, export)
+        run: make data
+      - name: Compute metrics in SQL
+        working-directory: pipeline
+        run: uv run python parity.py --out output/parity.json
+      - name: Check TypeScript metrics against SQL
+        working-directory: web
+        run: npx vitest run src/metrics/parity.test.ts
