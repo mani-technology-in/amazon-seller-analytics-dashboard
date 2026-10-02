@@ -2,3 +2,5 @@ dist
 node_modules
 public/data
 package-lock.json
+test-results
+playwright-report

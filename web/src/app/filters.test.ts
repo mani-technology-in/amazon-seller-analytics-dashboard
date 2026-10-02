@@ -40,10 +40,29 @@ describe('filters from the URL (FR-1, FR-9)', () => {
     expect(parse('preset=custom&from=nonsense').preset).toBe('last30')
   })
 
-  it('keep custom ranges inside the data', () => {
-    expect(parse('preset=custom&from=2024-01-01&to=2030-01-01').range).toEqual({
-      start: START,
-      end: END,
-    })
+  it('keep custom ranges inside the data and say so', () => {
+    const f = parse('preset=custom&from=2024-01-01&to=2030-01-01')
+    expect(f.range).toEqual({ start: START, end: END })
+    expect(f.rangeAdjusted).toBe('trimmed')
+    expect(parse('preset=custom&from=2025-11-01&to=2025-12-31').rangeAdjusted).toBeNull()
+    expect(parse('').rangeAdjusted).toBeNull()
+  })
+
+  it('put a reversed custom range in order', () => {
+    const f = parse('preset=custom&from=2026-09-30&to=2026-09-01')
+    expect(f.range).toEqual({ start: '2026-09-01', end: '2026-09-30' })
+    expect(f.rangeAdjusted).toBeNull()
+  })
+
+  it('use the default range when a custom range has no data at all (Testing D-3)', () => {
+    for (const q of [
+      'preset=custom&from=2024-01-01&to=2024-01-31',
+      'preset=custom&from=2027-01-01&to=2027-02-01',
+    ]) {
+      const f = parse(q)
+      expect(f.preset).toBe('last30')
+      expect(f.range).toEqual({ start: '2026-09-01', end: END })
+      expect(f.rangeAdjusted).toBe('outside')
+    }
   })
 })

@@ -73,9 +73,9 @@ jobs:
         working-directory: web
         run: npm run build
 
-      - name: Install Chromium for the smoke test
+      - name: Install Chromium, Firefox and WebKit for the smoke test
         working-directory: web
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium firefox webkit
       - name: Smoke test the build
         working-directory: web
         run: npm run smoke
