@@ -4,7 +4,26 @@ A demo analytics dashboard for an Amazon seller, built by [Mani Technology](http
 
 All data is synthetic. It is generated for a fictional brand ("Demo Brand") and shaped like real Amazon SP-API and Amazon Ads v3 reports, so a real connector could replace the generator later.
 
-> **Status:** in development. The data pipeline and the web app's data layer and metrics are complete; the dashboard pages arrive in the next pull request. Live demo: demo.manitechnology.com (coming soon).
+> **Status:** in development. The dashboard works end to end; deployment to Cloudflare Pages comes next. Live demo: demo.manitechnology.com (coming soon).
+
+## Screenshots
+
+| Overview | Advertising |
+| --- | --- |
+| ![Overview: KPI tiles with change against the previous period, daily sales and ad spend, ACoS and TACoS, top products and campaigns](docs/screenshots/overview.png) | ![Advertising: campaign table, keyword and target table with flags](docs/screenshots/advertising.png) |
+| **Products** | **Inventory** |
+| ![Products: sales, sessions, conversion, ad spend and TACoS per ASIN](docs/screenshots/products.png) | ![Inventory: available and inbound units, days of cover, low-stock flags](docs/screenshots/inventory.png) |
+
+## Pages
+
+| Page | What it shows | Requirements |
+| --- | --- | --- |
+| Overview | 8 KPI tiles with change against the previous period; daily sales vs ad spend; daily ACoS and TACoS; top 5 products and campaigns | FR-5 to FR-7 |
+| Advertising | Campaign table; keyword and target table flagging spend with no sales and ACoS above the target; filters for ad type and campaign | FR-8 to FR-10 |
+| Products | Product table (sales, units, sessions, conversion, ad spend, TACoS) and a daily detail page per ASIN | FR-11, FR-12 |
+| Inventory | Available and inbound units, average daily units, days of cover, low-stock and out-of-stock flags | FR-13, FR-14 |
+
+Every page shares one filter bar (date presets or a custom range, previous-period comparison, target ACoS, low-stock threshold). Filters live in the URL, so any view can be shared. Every table sorts by any column and exports to CSV.
 
 ## How it works
 
