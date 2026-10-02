@@ -1,4 +1,4 @@
-.PHONY: help install db db-down data parity dev test lint format
+.PHONY: help install db db-down data parity dev build smoke test lint format
 
 help:
 	@echo "make install   Install Python and web dependencies"
@@ -6,6 +6,7 @@ help:
 	@echo "make data      Generate data, load PostgreSQL, build marts, export JSON for the web app"
 	@echo "make parity    Check the web metrics against SQL (needs make data)"
 	@echo "make dev       Run the web app locally"
+	@echo "make smoke     Build the site and run the browser smoke test (needs make data)"
 	@echo "make test      Run pytest and Vitest"
 	@echo "make lint      Run ruff, ESLint and Prettier checks"
 	@echo "make format    Auto-format Python and web code"
@@ -32,6 +33,12 @@ parity:
 
 dev:
 	cd web && npm run dev
+
+build:
+	cd web && npm run build
+
+smoke: build
+	cd web && npm run smoke
 
 test:
 	cd pipeline && uv run pytest
