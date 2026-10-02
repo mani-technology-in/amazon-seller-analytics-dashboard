@@ -55,7 +55,7 @@ The pipeline reads `DATABASE_URL` (see `.env.example`); the default matches `doc
 | `ads/spCampaigns.json.gz` and seven more | Amazon Ads v3 reports for Sponsored Products, Sponsored Brands and Sponsored Display (`timeUnit` DAILY, GZIP_JSON) |
 | `products.json` | The product catalog |
 
-The data includes a weekly pattern, a Q4 peak, a January dip, Prime Day and Black Friday spikes with deal prices, two product launches, three stockouts caused by late shipments, and a few keywords that spend without selling. Ads stop serving while a product is out of stock. Campaign, targeting and advertised-product reports add up to the same totals, and ad orders never exceed total orders.
+The data includes a weekly pattern, a Q4 peak, a January dip, Prime Day and Black Friday spikes with deal prices, two product launches, three stockouts caused by late shipments, and a few broad or phrase keywords that spend a few hundred dollars a year without selling. Ad budgets follow a seasonal pattern (pushed in Q4 and around Prime Day, cut in January), so TACoS moves between about 9% and 14% by month. Ads stop serving while a product is out of stock. Campaign, targeting and advertised-product reports add up to the same totals, and ad orders never exceed total orders.
 
 Each file is loaded into the `raw` schema unchanged (one JSON record per row, with Amazon's own field names), so a real SP-API or Ads connector could load the same tables.
 

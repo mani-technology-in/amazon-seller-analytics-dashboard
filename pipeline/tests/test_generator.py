@@ -193,16 +193,47 @@ def test_no_sales_before_launch(sim, sales):
     assert len(launched_in_year) == len(config.LAUNCHES)
 
 
+def _no_sale_targets(ads) -> pd.DataFrame:
+    """Keywords and targets that spent over the year without a single sale."""
+    frames = []
+    for report, id_col, sales_col, type_col in (
+        ("spTargeting", "keywordId", "sales7d", "matchType"),
+        ("sbTargeting", "keywordId", "sales", "matchType"),
+        ("sdTargeting", "targetingId", "sales", None),
+    ):
+        df = ads[report]
+        cols = {"cost": "sum", sales_col: "sum"}
+        if type_col:
+            cols[type_col] = "first"
+        g = df.groupby(id_col).agg(cols).rename(columns={sales_col: "sales", type_col: "match"})
+        frames.append(g[(g["cost"] > 0) & (g["sales"] == 0)])
+    return pd.concat(frames)
+
+
 def test_some_targets_spend_without_sales(ads):
-    sp = ads["spTargeting"].groupby("keywordId")[["cost", "sales7d"]].sum()
-    sb = ads["sbTargeting"].groupby("keywordId")[["cost", "sales"]].sum()
-    sd = ads["sdTargeting"].groupby("targetingId")[["cost", "sales"]].sum()
-    wasted = (
-        ((sp["cost"] > 0) & (sp["sales7d"] == 0)).sum()
-        + ((sb["cost"] > 0) & (sb["sales"] == 0)).sum()
-        + ((sd["cost"] > 0) & (sd["sales"] == 0)).sum()
+    assert len(_no_sale_targets(ads)) >= 5
+
+
+def test_no_sale_targets_are_believable(ads):
+    """Never an exact match (that would sell), and small enough for a seller to overlook."""
+    wasted = _no_sale_targets(ads)
+    assert "EXACT" not in set(wasted["match"].dropna())
+    assert (wasted["cost"] <= 800).all(), wasted["cost"].max()
+
+
+def test_tacos_moves_with_the_ad_budget_pattern(sales, ads):
+    """More ad spend in Q4, less in January, so monthly TACoS spans at least 3 points."""
+    spend = (
+        pd.concat([ads[f"{p}Campaigns"][["date", "cost"]] for p in ("sp", "sb", "sd")])
+        .groupby("date")["cost"]
+        .sum()
     )
-    assert wasted >= 5
+    daily = pd.DataFrame({"spend": spend, "sales": sales.groupby("date")["sales"].sum()})
+    daily.index = pd.to_datetime(daily.index)
+    monthly = daily.groupby(daily.index.to_period("M")).sum()
+    tacos = monthly["spend"] / monthly["sales"]
+    assert tacos.max() - tacos.min() >= 0.03
+    assert tacos[pd.Period("2025-12")] > tacos[pd.Period("2026-01")]
 
 
 def test_most_campaigns_run_between_15_and_45_percent_acos(ads):
