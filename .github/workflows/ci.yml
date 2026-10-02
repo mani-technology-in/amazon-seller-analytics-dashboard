@@ -110,3 +110,18 @@ jobs:
       - name: Check TypeScript metrics against SQL
         working-directory: web
         run: npx vitest run src/metrics/parity.test.ts
+
+  deploy:
+    name: Deploy
+    needs: [pipeline, web, parity]
+    # Same-repository pull requests get a preview; pushes to main go to production.
+    # Pull requests from forks have no access to the secrets, so they are not deployed.
+    if: >-
+      github.event_name == 'push' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    uses: ./.github/workflows/deploy.yml
+    with:
+      branch: ${{ github.event_name == 'push' && 'main' || format('pr-{0}', github.event.pull_request.number) }}
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

@@ -23,3 +23,7 @@ pipeline/output/
 .vscode/
 .idea/
 .DS_Store
+
+# Playwright
+web/test-results/
+web/playwright-report/

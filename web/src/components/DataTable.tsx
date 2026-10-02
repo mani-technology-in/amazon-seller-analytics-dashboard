@@ -120,7 +120,7 @@ export function DataTable<T>({
           </button>
         </div>
       </header>
-      <div className="max-h-[32rem] overflow-auto">
+      <div className="relative max-h-[32rem] overflow-auto">
         <table className="w-full min-w-max text-left text-sm">
           <thead className="sticky top-0 z-10 bg-slate-50 text-xs text-slate-600">
             {table.getHeaderGroups().map((hg) => (
