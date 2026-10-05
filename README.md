@@ -4,7 +4,7 @@ A demo analytics dashboard for an Amazon seller, built by [Mani Technology](http
 
 All data is synthetic. It is generated for a fictional brand ("Demo Brand") and shaped like real Amazon SP-API and Amazon Ads v3 reports, so a real connector could replace the generator later.
 
-> **Live demo: [demo.manitechnology.com](https://demo.manitechnology.com)** (no login). Version 1 is complete; every merge to `main` deploys automatically.
+> **Live demo: [demo.manitechnology.com](https://demo.manitechnology.com)** (no login). Version 1 is complete; every merge to `main` deploys automatically. Read the one-page [case study](docs/case-study.md).
 
 ## Screenshots
 
@@ -48,7 +48,7 @@ PostgreSQL only runs at build time, on your machine or in GitHub Actions. The li
 | `web/src/data/` | `DataSource` interface and the static JSON version the demo uses |
 | `web/src/metrics/` | Date ranges and every metric the dashboard shows, with unit and parity tests |
 | `pipeline/parity.py` | The same metrics computed in SQL, for the parity check |
-| `docs/` | Metric definitions and project documentation |
+| `docs/` | Metric definitions, case study and screenshots |
 | `web/e2e/` | Playwright smoke test of every page, run before and after each deploy |
 | `.github/workflows/` | `ci.yml` (checks on every push and pull request) and `deploy.yml` (Cloudflare Pages) |
 
