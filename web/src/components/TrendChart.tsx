@@ -9,13 +9,26 @@ import {
 } from 'echarts/components'
 import * as echarts from 'echarts/core'
 import type { ComposeOption } from 'echarts/core'
+import type { CallbackDataParams } from 'echarts/types/dist/shared'
 import type { LineSeriesOption } from 'echarts/charts'
 import { SVGRenderer } from 'echarts/renderers'
 import { useEffect, useRef } from 'react'
 import { SERIES_COLORS } from '../lib/colors'
+import { chartTooltip, type TooltipItem } from './chartTooltip'
 import { dateLong, dateShort } from '../lib/format'
 
 echarts.use([LineChart, GridComponent, LegendComponent, TooltipComponent, SVGRenderer])
+
+/** Axis-tooltip params carry `axisValue` (the date), which ECharts' own type leaves out. */
+function toTooltipItem(p: CallbackDataParams): TooltipItem {
+  const { axisValue } = p as CallbackDataParams & { axisValue?: unknown }
+  return {
+    axisValue: String(axisValue ?? ''),
+    seriesName: p.seriesName ?? '',
+    seriesIndex: p.seriesIndex ?? 0,
+    value: p.value,
+  }
+}
 
 type Option = ComposeOption<
   LineSeriesOption | GridComponentOption | LegendComponentOption | TooltipComponentOption
@@ -60,8 +73,10 @@ export function TrendChart({ title, dates, series, format, height = 280 }: Trend
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'line', lineStyle: { color: '#8a8984' } },
-        valueFormatter: (v) => format(typeof v === 'number' ? v : null),
-        formatter: undefined,
+        // our own DOM tooltip: the default one uses inline styles, which the CSP blocks
+        formatter: (params) =>
+          chartTooltip((Array.isArray(params) ? params : [params]).map(toTooltipItem), format),
+        className: 'chart-tip-box',
       },
       xAxis: {
         type: 'category',
