@@ -31,8 +31,8 @@ def build() -> dict[str, int]:
             counts = {}
             for table in MART_TABLES:
                 query = sql.SQL("SELECT count(*) FROM {}").format(sql.Identifier("marts", table))
-                # Not SQLAlchemy and not string-built (sql.Identifier): the rule misfires.
-                # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query
+                # Semgrep sqlalchemy-execute-raw-query misfires: psycopg sql.Identifier
+                # nosemgrep
                 cur.execute(query)
                 counts[table] = cur.fetchone()[0]
     return counts

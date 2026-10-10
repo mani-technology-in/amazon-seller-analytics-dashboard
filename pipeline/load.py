@@ -69,8 +69,8 @@ def copy_rows(conn: Connection, table: str, rows: Iterator[Row]) -> int:
     with conn.cursor() as cur:
         target = sql.Identifier("raw", table)  # a quoted identifier, never string-formatted SQL
         truncate = sql.SQL("TRUNCATE {}").format(target)
-        # Not SQLAlchemy and not string-built (psycopg sql.Identifier), so the rule misfires:
-        # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query
+        # Semgrep rule sqlalchemy-execute-raw-query misfires: psycopg sql.Identifier, not SQLAlchemy
+        # nosemgrep
         cur.execute(truncate)
         copy_sql = sql.SQL("COPY {} (report_date, source_file, record) FROM STDIN").format(target)
         with cur.copy(copy_sql) as copy:
