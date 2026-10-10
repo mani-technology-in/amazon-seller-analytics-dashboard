@@ -8,10 +8,14 @@ on:
 permissions:
   contents: read
 
+# Third-party actions are pinned to full commit SHAs (the tag is in the comment).
+# Dependabot proposes updates weekly (.github/dependabot.yml).
+
 jobs:
   pipeline:
     name: Pipeline (Python + PostgreSQL)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:16
@@ -32,8 +36,10 @@ jobs:
       run:
         working-directory: pipeline
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           python-version: "3.12"
       - run: uv sync --locked
@@ -47,12 +53,15 @@ jobs:
   web:
     name: Web (React + TypeScript)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
           cache: npm
@@ -69,9 +78,11 @@ jobs:
       - name: Build
         run: npm run build
 
+
   parity:
     name: Parity (SQL metrics = TypeScript metrics)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:16
@@ -91,11 +102,13 @@ jobs:
       PARITY_FIXTURE: ${{ github.workspace }}/pipeline/output/parity.json
       REQUIRE_PARITY: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
           cache: npm
@@ -111,14 +124,59 @@ jobs:
         working-directory: web
         run: npx vitest run src/metrics/parity.test.ts
 
+  security:
+    # One job, one fixed name ("Security"), so the main branch ruleset can require it.
+    name: Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # gitleaks scans the whole history
+          persist-credentials: false
+      - name: Secrets (gitleaks 8.30.1)
+        run: |
+          curl -sSfL -o gl.tgz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gl.tgz" | sha256sum -c -
+          tar xzf gl.tgz gitleaks && rm gl.tgz
+          ./gitleaks git --redact --no-banner --exit-code 1 .
+      - name: Dependencies (osv-scanner 2.6.0)
+        run: |
+          curl -sSfL -o osv-scanner https://github.com/google/osv-scanner/releases/download/v2.6.0/osv-scanner_linux_amd64
+          echo "ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108  osv-scanner" | sha256sum -c -
+          chmod +x osv-scanner
+          ./osv-scanner scan source --lockfile web/package-lock.json --lockfile pipeline/uv.lock
+      - name: Workflows and Dependabot (zizmor 1.30.1)
+        env:
+          GH_TOKEN: ${{ github.token }} # read-only; lets zizmor verify the pinned SHAs online
+        run: pipx run zizmor==1.30.1 --min-severity medium .
+      - name: Code (Semgrep 1.180.0, high severity)
+        run: |
+          set +e
+          pipx run semgrep==1.180.0 scan --metrics=off --config p/default --severity ERROR --error \
+            --json --output semgrep.json pipeline web .github
+          code=$?
+          # Show each finding and error as an annotation on the pull request.
+          jq -r '.results[] | "::error file=\(.path),line=\(.start.line)::\(.check_id): \(.extra.message | gsub("\n"; " ") | .[0:300])"' semgrep.json
+          jq -r '.errors[] | "::warning::Semgrep error: \(.type // "") \(.message // "" | gsub("\n"; " ") | .[0:300])"' semgrep.json
+          exit $code
+      - name: No Satoshi font files (its licence forbids public copies)
+        run: |
+          found="$(git ls-files | grep -iE 'satoshi.*\.(woff2?|ttf|otf|eot)$' || true)"
+          if [ -n "$found" ]; then
+            echo "::error::Satoshi font files must not be in this public repo: $found"
+            exit 1
+          fi
+
   deploy:
     name: Deploy
-    needs: [pipeline, web, parity]
+    needs: [pipeline, web, parity, security]
     # Same-repository pull requests get a preview; pushes to main go to production.
-    # Pull requests from forks have no access to the secrets, so they are not deployed.
+    # Pull requests from forks, and Dependabot's, get no Cloudflare secrets, so they are not deployed.
     if: >-
       github.event_name == 'push' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.user.login != 'dependabot[bot]')
     uses: ./.github/workflows/deploy.yml
     with:
       branch: ${{ github.event_name == 'push' && 'main' || format('pr-{0}', github.event.pull_request.number) }}

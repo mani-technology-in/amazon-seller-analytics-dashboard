@@ -1,1 +1,30 @@
 @import 'tailwindcss';
+
+/* Chart tooltip (components/chartTooltip.ts). Styled here, not inline, so the
+   Content-Security-Policy can keep style-src 'self'. Swatch colours are set per series in chartTooltip.ts. */
+.chart-tip {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #1f1e1d;
+}
+.chart-tip-date {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+.chart-tip-row {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chart-tip-row b {
+  margin-left: auto;
+  padding-left: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.chart-tip-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
