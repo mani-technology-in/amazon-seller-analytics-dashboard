@@ -1,14 +1,19 @@
 """Write the simulation out as files shaped like real Amazon reports.
 
-| File                                | Real report                                            |
-| ----------------------------------- | ------------------------------------------------------ |
-| products.json                       | Catalog listing (not an Amazon report)                 |
-| sales_traffic/YYYY-MM-DD.json       | SP-API GET_SALES_AND_TRAFFIC_REPORT, DAY / CHILD ASIN  |
-| fba_inventory/YYYY-MM-DD.tsv        | SP-API GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA         |
-| ads/<reportTypeId>.json.gz          | Amazon Ads v3 reports, timeUnit DAILY, GZIP_JSON       |
+| File                                   | Real report                                         |
+| -------------------------------------- | --------------------------------------------------- |
+| products.json                          | Catalog listing (not an Amazon report)              |
+| marketplaces.json                      | The seller's marketplaces (not an Amazon report)    |
+| fx/rates.csv                           | Monthly exchange rates (synthetic, not from Amazon) |
+| sales_traffic/<MKT>/YYYY-MM-DD.json    | SP-API GET_SALES_AND_TRAFFIC_REPORT, DAY / CHILD    |
+| fba_inventory/<NETWORK>/YYYY-MM-DD.tsv | SP-API GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA      |
+| ads/<MKT>/<reportTypeId>.json.gz       | Amazon Ads v3 reports, timeUnit DAILY, GZIP_JSON    |
 
-Ads reports cover the whole year with a `date` column, as a DAILY v3 report does. Rows with no
-impressions are left out, as Amazon does.
+One sales and traffic report per marketplace (the report's marketplaceIds option), one inventory
+report per fulfilment network, one set of ads reports per Amazon Ads profile (one profile per
+marketplace). Amounts are in each marketplace's own currency. Ads reports cover the whole year
+with a `date` column, as a DAILY v3 report does. Rows with no impressions are left out, as Amazon
+does.
 """
 
 import csv
@@ -20,6 +25,8 @@ from pathlib import Path
 import numpy as np
 
 from . import config
+from .catalog import Catalog
+from .markets import MarketSales, World
 from .simulate import AdCells, Simulation
 
 # Ads v3 report columns written for each report type (see the Design tab, "Source reports").
@@ -161,21 +168,35 @@ def money(cents) -> float:
     return round(int(cents) / 100, 2)
 
 
-def amount(cents) -> dict:
-    return {"amount": money(cents), "currencyCode": config.CURRENCY}
+def amount(cents, currency: str) -> dict:
+    return {"amount": money(cents), "currencyCode": currency}
 
 
-def write_all(sim: Simulation, out: Path) -> dict[str, int]:
-    """Write every report under `out` and return the number of rows per report."""
+def write_all(world: World, out: Path) -> dict[str, int]:
+    """Write every report under `out` and return the number of rows per report (all
+    marketplaces or networks together)."""
     out.mkdir(parents=True, exist_ok=True)
-    counts = {"products": _write_products(sim, out)}
-    counts["sales_traffic"] = _write_sales_traffic(sim, out / "sales_traffic")
-    counts["fba_inventory"] = _write_fba_inventory(sim, out / "fba_inventory")
-    counts.update(_write_ads(sim, out / "ads"))
+    counts = {
+        "products": _write_products(world, out),
+        "marketplaces": _write_marketplaces(out),
+        "fx_rates": _write_fx(world, out / "fx"),
+        "sales_traffic": 0,
+        "fba_inventory": 0,
+    }
+    for code, market in world.markets.items():
+        counts["sales_traffic"] += _write_sales_traffic(
+            world.days, market, out / "sales_traffic" / code
+        )
+        if market.ads:
+            for name, n in _write_ads(world.days, market, out / "ads" / code).items():
+                counts[name] = counts.get(name, 0) + n
+    for code, sim in world.networks.items():
+        counts["fba_inventory"] += _write_fba_inventory(sim, out / "fba_inventory" / code)
     return counts
 
 
-def _write_products(sim: Simulation, out: Path) -> int:
+def _write_products(world: World, out: Path) -> int:
+    networks = {n.code: n for n in config.NETWORKS}
     rows = [
         {
             "asin": p.asin,
@@ -184,18 +205,53 @@ def _write_products(sim: Simulation, out: Path) -> int:
             "brand": config.BRAND,
             "category": p.category,
             "price": {"amount": p.price, "currencyCode": config.CURRENCY},
+            "marketplacePrices": [
+                {
+                    "marketplaceId": m.marketplace_id,
+                    "amount": world.networks[m.network].catalog.products[p.index].price,
+                    "currencyCode": networks[m.network].currency,
+                }
+                for m in config.MARKETPLACES
+            ],
             "launchDate": p.launch_date.isoformat(),
         }
-        for p in sim.catalog.products
+        for p in world.catalog.products
     ]
     (out / "products.json").write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
     return len(rows)
 
 
-def _write_sales_traffic(sim: Simulation, out: Path) -> int:
-    out.mkdir(exist_ok=True)
+def _write_marketplaces(out: Path) -> int:
+    rows = [
+        {
+            "code": m.code,
+            "marketplaceId": m.marketplace_id,
+            "name": m.name,
+            "currencyCode": m.currency,
+            "fulfillmentNetwork": m.network,
+            "adsProfile": m.ads,
+        }
+        for m in config.MARKETPLACES
+    ]
+    (out / "marketplaces.json").write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
+    return len(rows)
+
+
+def _write_fx(world: World, out: Path) -> int:
+    out.mkdir(parents=True, exist_ok=True)
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator="\n")
+    w.writerow(["month", "currency", "usd_rate"])
+    w.writerows(world.fx)
+    (out / "rates.csv").write_text(buf.getvalue(), encoding="utf-8")
+    return len(world.fx)
+
+
+def _write_sales_traffic(days, sim: MarketSales, out: Path) -> int:
+    out.mkdir(parents=True, exist_ok=True)
+    currency = sim.marketplace.currency
     rows_written = 0
-    for d, day in enumerate(sim.days):
+    for d, day in enumerate(days):
         by_asin = []
         for p in sim.catalog.products:
             i = p.index
@@ -210,7 +266,7 @@ def _write_sales_traffic(sim: Simulation, out: Path) -> int:
                     "sku": p.sku,
                     "salesByAsin": {
                         "unitsOrdered": units,
-                        "orderedProductSales": amount(sim.sales_cents[i, d]),
+                        "orderedProductSales": amount(sim.sales_cents[i, d], currency),
                         "totalOrderItems": int(sim.orders[i, d]),
                     },
                     "trafficByAsin": {
@@ -229,13 +285,13 @@ def _write_sales_traffic(sim: Simulation, out: Path) -> int:
                 "reportOptions": {"dateGranularity": "DAY", "asinGranularity": "CHILD"},
                 "dataStartTime": day.isoformat(),
                 "dataEndTime": day.isoformat(),
-                "marketplaceIds": [config.MARKETPLACE_ID],
+                "marketplaceIds": [sim.marketplace.marketplace_id],
             },
             "salesAndTrafficByDate": [
                 {
                     "date": day.isoformat(),
                     "salesByDate": {
-                        "orderedProductSales": amount(sim.sales_cents[:, d].sum()),
+                        "orderedProductSales": amount(sim.sales_cents[:, d].sum(), currency),
                         "unitsOrdered": int(sim.units[:, d].sum()),
                         "totalOrderItems": int(sim.orders[:, d].sum()),
                     },
@@ -268,7 +324,8 @@ def _inbound(shipments, d: int) -> tuple[int, int, int]:
 
 
 def _write_fba_inventory(sim: Simulation, out: Path) -> int:
-    out.mkdir(exist_ok=True)
+    """`your-price` is in the network's currency, as Amazon reports it."""
+    out.mkdir(parents=True, exist_ok=True)
     rows_written = 0
     for d, day in enumerate(sim.days):
         buf = io.StringIO()
@@ -314,7 +371,7 @@ def _write_fba_inventory(sim: Simulation, out: Path) -> int:
     return rows_written
 
 
-def _rows(sim: Simulation, a: AdCells, kind: str) -> list[dict]:
+def _rows(days, catalog: Catalog, a: AdCells, kind: str, currency: str) -> list[dict]:
     """Aggregate one campaign's cells to the grain of a report kind."""
     c = a.campaign
     sp = c.ad_product == "SPONSORED_PRODUCTS"
@@ -331,7 +388,7 @@ def _rows(sim: Simulation, a: AdCells, kind: str) -> list[dict]:
     rows = []
     keys = [None] if kind == "campaign" else range(m["impressions"].shape[0])
     for k in keys:
-        for d, day in enumerate(sim.days):
+        for d, day in enumerate(days):
             imp = int(m["impressions"][d] if k is None else m["impressions"][k, d])
             if imp == 0:
                 continue
@@ -353,7 +410,7 @@ def _rows(sim: Simulation, a: AdCells, kind: str) -> list[dict]:
                 if sp:
                     row.update(
                         campaignBudgetAmount=c.budget,
-                        campaignBudgetCurrencyCode=config.CURRENCY,
+                        campaignBudgetCurrencyCode=currency,
                         unitsSoldClicks7d=int(v("units")),
                     )
                 else:
@@ -372,7 +429,7 @@ def _rows(sim: Simulation, a: AdCells, kind: str) -> list[dict]:
                 else:
                     row.update(keywordId=t.target_id, keyword=t.text, matchType=t.match_type)
             else:
-                p = sim.catalog.products[int(a.product_idx[k])]
+                p = catalog.products[int(a.product_idx[k])]
                 row.update(adGroupId=c.ad_group_id, adId=c.ad_ids[p.asin])
                 if sp:
                     row.update(advertisedAsin=p.asin, advertisedSku=p.sku)
@@ -382,8 +439,8 @@ def _rows(sim: Simulation, a: AdCells, kind: str) -> list[dict]:
     return rows
 
 
-def _write_ads(sim: Simulation, out: Path) -> dict[str, int]:
-    out.mkdir(exist_ok=True)
+def _write_ads(days, sim: MarketSales, out: Path) -> dict[str, int]:
+    out.mkdir(parents=True, exist_ok=True)
     prefix = {"SPONSORED_PRODUCTS": "sp", "SPONSORED_BRANDS": "sb", "SPONSORED_DISPLAY": "sd"}
     kinds = {"Campaigns": "campaign", "Targeting": "target", "AdvertisedProduct": "product"}
     counts = {}
@@ -392,7 +449,7 @@ def _write_ads(sim: Simulation, out: Path) -> dict[str, int]:
         rows = []
         for a in sim.ads:
             if prefix[a.campaign.ad_product] == pre:
-                rows.extend(_rows(sim, a, kinds[suffix]))
+                rows.extend(_rows(days, sim.catalog, a, kinds[suffix], sim.marketplace.currency))
         rows = [{col: r[col] for col in columns} for r in rows]
         payload = json.dumps(rows, separators=(",", ":")).encode("utf-8")
         # mtime=0 keeps the file byte-identical between runs

@@ -14,6 +14,8 @@ MART_TABLES = [
     "dim_product",
     "dim_campaign",
     "dim_target",
+    "dim_marketplace",
+    "dim_fx_monthly",
     "fct_sales_daily",
     "fct_ads_campaign_daily",
     "fct_ads_target_daily",

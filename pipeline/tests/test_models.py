@@ -18,9 +18,9 @@ AD_REPORTS = {
 
 
 @pytest.fixture(scope="module")
-def warehouse(sim, tmp_path_factory):
+def warehouse(world, tmp_path_factory):
     out = tmp_path_factory.mktemp("models")
-    write_all(sim, out)
+    write_all(world, out)
     load(out)
     return build()
 
@@ -34,10 +34,42 @@ def _one(sql: str, params=None):
 def test_dimensions(warehouse):
     assert warehouse["dim_date"] == 365
     assert warehouse["dim_product"] == 40
-    assert warehouse["dim_campaign"] == 18
-    assert warehouse["dim_target"] == 180
-    counts = dict(_all("SELECT ad_product, count(*) FROM marts.dim_campaign GROUP BY ad_product"))
-    assert counts == {"SP": 10, "SB": 4, "SD": 4}
+    assert warehouse["dim_marketplace"] == 6
+    assert warehouse["dim_fx_monthly"] == 12 * 5  # four currencies plus USD
+    counts = dict(
+        _all("SELECT marketplace || ' ' || ad_product, count(*) FROM marts.dim_campaign GROUP BY 1")
+    )
+    assert counts == {"US SP": 10, "US SB": 4, "US SD": 4, "UK SP": 10, "DE SP": 10}
+    us_targets = _one("SELECT count(*) FROM marts.dim_target WHERE marketplace = 'US'")
+    assert us_targets == (180,)
+
+
+def test_sales_are_in_each_marketplaces_currency(warehouse):
+    pairs = set(
+        _all(
+            "SELECT DISTINCT f.marketplace, f.currency, m.currency FROM marts.fct_sales_daily f "
+            "JOIN marts.dim_marketplace m USING (marketplace)"
+        )
+    )
+    assert {(code, cur) for code, cur, _ in pairs} == {
+        ("US", "USD"),
+        ("CA", "CAD"),
+        ("MX", "MXN"),
+        ("UK", "GBP"),
+        ("DE", "EUR"),
+        ("FR", "EUR"),
+    }
+    assert all(fact == dim for _, fact, dim in pairs)
+
+
+def test_every_month_and_currency_has_a_rate(warehouse):
+    missing = _one(
+        "SELECT count(*) FROM marts.fct_sales_daily f "
+        "LEFT JOIN marts.dim_fx_monthly x "
+        "  ON x.year_month = to_char(f.date, 'YYYY-MM') AND x.currency = f.currency "
+        "WHERE x.usd_rate IS NULL"
+    )
+    assert missing == (0,)
 
 
 def _all(sql: str):
@@ -140,7 +172,7 @@ def test_reloaded_record_replaces_the_old_one(warehouse):
     with connect() as conn, conn.cursor() as cur:
         cur.execute(
             "INSERT INTO raw.sp_campaigns (report_date, source_file, record, loaded_at) "
-            "SELECT report_date, 'reload.json', jsonb_set(record, '{cost}', '999.99'), "
+            "SELECT report_date, source_file, jsonb_set(record, '{cost}', '999.99'), "
             "       loaded_at + interval '1 hour' "
             "FROM raw.sp_campaigns ORDER BY report_date, record->>'campaignId' LIMIT 1 "
             "RETURNING report_date, (record->>'campaignId')::bigint"

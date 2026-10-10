@@ -1,8 +1,10 @@
 -- Marts: the tables the dashboard export reads. Rebuilt from staging on every run.
--- Grain is daily throughout; the dashboard adds up any date range itself.
+-- Grain is daily throughout; the dashboard adds up any date range itself. Facts carry the
+-- marketplace (inventory: the fulfilment network) and money in its own currency;
+-- dim_fx_monthly turns it into USD.
 
 DROP TABLE IF EXISTS marts.dim_date, marts.dim_product, marts.dim_campaign, marts.dim_target,
-    marts.fct_sales_daily, marts.fct_ads_campaign_daily, marts.fct_ads_target_daily,
+    marts.dim_marketplace, marts.dim_fx_monthly, marts.fct_sales_daily, marts.fct_ads_campaign_daily, marts.fct_ads_target_daily,
     marts.fct_ads_product_daily, marts.fct_inventory_daily;
 
 -- Dimensions -------------------------------------------------------------------------------
@@ -21,6 +23,16 @@ FROM generate_series(
     interval '1 day'
 ) AS d;
 
+CREATE TABLE marts.dim_marketplace AS
+SELECT marketplace, marketplace_id, name, currency, network, has_ads
+FROM staging.stg_marketplaces;
+
+-- USD per unit of each currency, by month; USD itself is 1.
+CREATE TABLE marts.dim_fx_monthly AS
+SELECT year_month, currency, usd_rate FROM staging.stg_fx_rates
+UNION ALL
+SELECT DISTINCT year_month, 'USD', 1::numeric(12, 6) FROM staging.stg_fx_rates;
+
 CREATE TABLE marts.dim_product AS
 SELECT asin, sku, title, category, price, launch_date
 FROM staging.stg_products;
@@ -33,6 +45,7 @@ WITH all_days AS (
 )
 SELECT DISTINCT ON (campaign_id)
     campaign_id,
+    marketplace,
     campaign_name,
     ad_product,
     CASE ad_product
@@ -52,18 +65,19 @@ WITH all_days AS (
     UNION ALL SELECT * FROM staging.stg_sd_targeting
 )
 SELECT DISTINCT ON (campaign_id, target_id)
-    campaign_id, target_id, ad_group_id, ad_product, target_text, match_type
+    campaign_id, target_id, marketplace, ad_group_id, ad_product, target_text, match_type
 FROM all_days
 ORDER BY campaign_id, target_id, date DESC;
 
 -- Facts ------------------------------------------------------------------------------------
 
 CREATE TABLE marts.fct_sales_daily AS
-SELECT date, asin, units, orders, sales, sessions, page_views, buy_box_pct
+SELECT date, marketplace, asin, units, orders, sales, currency, sessions, page_views, buy_box_pct
 FROM staging.stg_sales_traffic;
 
 CREATE TABLE marts.fct_ads_campaign_daily AS
-SELECT date, campaign_id, ad_product, impressions, clicks, cost, orders, sales, units
+SELECT date, marketplace, campaign_id, ad_product, impressions, clicks, cost, orders, sales,
+    units
 FROM (
     SELECT * FROM staging.stg_sp_campaigns
     UNION ALL SELECT * FROM staging.stg_sb_campaigns
@@ -71,7 +85,8 @@ FROM (
 ) c;
 
 CREATE TABLE marts.fct_ads_target_daily AS
-SELECT date, campaign_id, target_id, ad_product, impressions, clicks, cost, orders, sales
+SELECT date, marketplace, campaign_id, target_id, ad_product, impressions, clicks, cost, orders,
+    sales
 FROM (
     SELECT * FROM staging.stg_sp_targeting
     UNION ALL SELECT * FROM staging.stg_sb_targeting
@@ -83,6 +98,7 @@ FROM (
 CREATE TABLE marts.fct_ads_product_daily AS
 SELECT
     date,
+    marketplace,
     asin,
     sum(impressions)::int AS impressions,
     sum(clicks)::int AS clicks,
@@ -93,11 +109,12 @@ FROM (
     SELECT * FROM staging.stg_sp_advertised_product
     UNION ALL SELECT * FROM staging.stg_sd_advertised_product
 ) p
-GROUP BY date, asin;
+GROUP BY date, marketplace, asin;
 
 CREATE TABLE marts.fct_inventory_daily AS
 SELECT
     date,
+    network,
     asin,
     available,
     reserved,
@@ -109,10 +126,12 @@ FROM staging.stg_fba_inventory;
 
 ALTER TABLE marts.dim_date ADD PRIMARY KEY (date);
 ALTER TABLE marts.dim_product ADD PRIMARY KEY (asin);
+ALTER TABLE marts.dim_marketplace ADD PRIMARY KEY (marketplace);
+ALTER TABLE marts.dim_fx_monthly ADD PRIMARY KEY (year_month, currency);
 ALTER TABLE marts.dim_campaign ADD PRIMARY KEY (campaign_id);
 ALTER TABLE marts.dim_target ADD PRIMARY KEY (campaign_id, target_id);
-ALTER TABLE marts.fct_sales_daily ADD PRIMARY KEY (date, asin);
+ALTER TABLE marts.fct_sales_daily ADD PRIMARY KEY (date, marketplace, asin);
 ALTER TABLE marts.fct_ads_campaign_daily ADD PRIMARY KEY (date, campaign_id);
 ALTER TABLE marts.fct_ads_target_daily ADD PRIMARY KEY (date, campaign_id, target_id);
-ALTER TABLE marts.fct_ads_product_daily ADD PRIMARY KEY (date, asin);
-ALTER TABLE marts.fct_inventory_daily ADD PRIMARY KEY (date, asin);
+ALTER TABLE marts.fct_ads_product_daily ADD PRIMARY KEY (date, marketplace, asin);
+ALTER TABLE marts.fct_inventory_daily ADD PRIMARY KEY (date, network, asin);
