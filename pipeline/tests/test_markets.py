@@ -199,3 +199,80 @@ def test_no_absurd_outliers(all_sales):
     for code, s in daily.groupby(level=0):
         s = s[s > 0]
         assert s.max() <= 6 * np.median(s), (code, s.max(), np.median(s))
+
+
+# --- The v1.0 consistency rules hold in every network -------------------------------------
+
+
+def _ads(output: Path, code: str) -> dict[str, pd.DataFrame]:
+    frames = {}
+    for name in ("spCampaigns", "spTargeting", "spAdvertisedProduct"):
+        with gzip.open(output / "ads" / code / f"{name}.json.gz", "rt", encoding="utf-8") as f:
+            frames[name] = pd.DataFrame(json.load(f))
+    return frames
+
+
+def _by_campaign_day(df: pd.DataFrame) -> pd.DataFrame:
+    cols = ["impressions", "clicks", "cost", "sales7d", "purchases7d"]
+    cents = df.assign(cost=(df["cost"] * 100).round(), sales7d=(df["sales7d"] * 100).round())
+    return cents.groupby(["campaignId", "date"])[cols].sum().sort_index()
+
+
+@pytest.mark.parametrize("code", ["UK", "DE"])
+def test_campaign_targeting_and_product_reports_agree(output, code):
+    ads = _ads(output, code)
+    campaign = _by_campaign_day(ads["spCampaigns"])
+    pd.testing.assert_frame_equal(campaign, _by_campaign_day(ads["spTargeting"]), check_dtype=False)
+    product = _by_campaign_day(ads["spAdvertisedProduct"])
+    pd.testing.assert_frame_equal(campaign, product, check_dtype=False)
+
+
+@pytest.mark.parametrize("code", ["UK", "DE"])
+def test_ad_orders_never_exceed_total_orders(output, all_sales, code):
+    product = _ads(output, code)["spAdvertisedProduct"]
+    ad = product.groupby(["advertisedAsin", "date"])["purchases7d"].sum()
+    sales = all_sales[all_sales["marketplace"] == code]
+    total = sales.assign(date=sales["date"].map(date.isoformat)).set_index(["asin", "date"])
+    joined = pd.concat([ad.rename("ad"), total["orders"].rename("total")], axis=1).fillna(0)
+    assert (joined["ad"] <= joined["total"]).all(), code
+
+
+def test_ad_ids_are_unique_across_marketplaces(output):
+    """Staging and the marts key ads by Amazon's IDs, so no ID may repeat between accounts."""
+    seen: dict[str, set[int]] = {}
+    for code in ("US", "UK", "DE"):
+        for path in (output / "ads" / code).glob("*.json.gz"):
+            with gzip.open(path, "rt", encoding="utf-8") as f:
+                rows = json.load(f)
+            for key in ("campaignId", "adGroupId", "keywordId", "targetingId", "adId"):
+                ids = {r[key] for r in rows if key in r}
+                for other, other_ids in seen.items():
+                    if other.split("/")[0] != code and other.endswith(key):
+                        assert not ids & other_ids, (code, other, key)
+                seen.setdefault(f"{code}/{key}", set()).update(ids)
+
+
+@pytest.mark.parametrize("code", ["CA", "MX", "UK", "EU"])
+def test_stock_and_sales_follow_the_v1_rules(world, code):
+    sim = world.networks[code]
+    assert (sim.stock_end >= 0).all()
+    assert (sim.units >= sim.orders).all()
+    for p in sim.catalog.products:
+        empty = sim.stock_end[p.index, :-1] <= 0
+        arrivals = {s.arrives for s in sim.shipments[p.index]}
+        for d in np.flatnonzero(empty):
+            if d + 1 not in arrivals:
+                assert sim.units[p.index, d + 1] == 0, (code, p.title, sim.days[d + 1])
+        launch = (p.launch_date - sim.days[0]).days
+        if launch > 0:
+            assert sim.units[p.index, :launch].sum() == 0, (code, p.title)
+
+
+def test_only_the_planned_products_run_out_for_a_week(world):
+    """A week or more out of stock happens only where it is planned; the slowest sellers may
+    still have a short gap of a few days, as small real listings do."""
+    for n in config.NETWORKS:
+        sim = world.networks[n.code]
+        ranks = config.STOCKOUT_ASIN_RANKS if n.code == "US" else n.stockout_ranks
+        planned = {p.index for p in sim.catalog.products if p.rank in ranks}
+        assert _out_of_stock_products(sim) == planned, n.code

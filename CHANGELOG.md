@@ -8,9 +8,9 @@ Version 1.1 (change request CR-1): a redesign to match the Amazon section of man
 
 ### Added
 
-- Synthetic data for six marketplaces (US, Canada, Mexico, UK, Germany, France) on five fulfilment networks, each in its own currency with Amazon's marketplace IDs. Mexico and France open during the year and ramp up; the UK and Germany run Sponsored Products ads; Germany and France share EU stock. Monthly exchange rates convert everything to USD.
+- Synthetic data for six marketplaces (US, Canada, Mexico, UK, Germany, France) on five fulfilment networks, each in its own currency with Amazon's marketplace IDs. Mexico and France open during the year and ramp up; the UK and Germany run Sponsored Products ads; Germany and France share EU stock. Monthly exchange rates are included for converting to USD; the conversion arrives with the new screens.
 - New marts `dim_marketplace` and `dim_fx_monthly`; every fact table has a `marketplace` (inventory: `network`) column.
-- The US data is byte-identical to 1.0.0, and the dashboard's export stays US-only until the new screens, so the live site does not change yet.
+- The US report files are byte-identical to 1.0.0, and the dashboard's export stays US-only until the new screens, so the live site does not change yet.
 
 ### Security
 

@@ -172,7 +172,7 @@ def test_reloaded_record_replaces_the_old_one(warehouse):
     with connect() as conn, conn.cursor() as cur:
         cur.execute(
             "INSERT INTO raw.sp_campaigns (report_date, source_file, record, loaded_at) "
-            "SELECT report_date, 'reload.json', jsonb_set(record, '{cost}', '999.99'), "
+            "SELECT report_date, source_file, jsonb_set(record, '{cost}', '999.99'), "
             "       loaded_at + interval '1 hour' "
             "FROM raw.sp_campaigns ORDER BY report_date, record->>'campaignId' LIMIT 1 "
             "RETURNING report_date, (record->>'campaignId')::bigint"

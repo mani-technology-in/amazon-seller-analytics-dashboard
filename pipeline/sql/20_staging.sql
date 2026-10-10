@@ -2,7 +2,7 @@
 -- If the same record is loaded twice (same natural key), the most recently loaded one wins.
 -- The marketplace (or, for inventory, the fulfilment network) comes from the file's folder,
 -- e.g. sales_traffic/UK/2026-09-30.json. Money is numeric(12,2) in the marketplace's own
--- currency; conversion to USD happens in the dashboard and the parity check. Ad "orders" and
+-- currency; marts.dim_fx_monthly holds the rates for converting it to USD. Ad "orders" and
 -- "sales" are each ad type's own attribution: 7-day for Sponsored Products (purchases7d,
 -- sales7d), 14-day for Sponsored Brands and Sponsored Display (purchases, sales).
 --
@@ -81,7 +81,7 @@ ORDER BY report_date, split_part(source_file, '/', 2), record->>'sku', loaded_at
 -- Campaign reports -------------------------------------------------------------------------
 
 CREATE OR REPLACE VIEW staging.stg_sp_campaigns AS
-SELECT DISTINCT ON (report_date, record->>'campaignId')
+SELECT DISTINCT ON (report_date, split_part(source_file, '/', 2), record->>'campaignId')
     report_date AS date,
     split_part(source_file, '/', 2) AS marketplace,
     'SP'::text AS ad_product,
@@ -96,10 +96,10 @@ SELECT DISTINCT ON (report_date, record->>'campaignId')
     (record->>'sales7d')::numeric(12, 2) AS sales,
     (record->>'unitsSoldClicks7d')::int AS units
 FROM raw.sp_campaigns
-ORDER BY report_date, record->>'campaignId', loaded_at DESC;
+ORDER BY report_date, split_part(source_file, '/', 2), record->>'campaignId', loaded_at DESC;
 
 CREATE OR REPLACE VIEW staging.stg_sb_campaigns AS
-SELECT DISTINCT ON (report_date, record->>'campaignId')
+SELECT DISTINCT ON (report_date, split_part(source_file, '/', 2), record->>'campaignId')
     report_date AS date,
     split_part(source_file, '/', 2) AS marketplace,
     'SB'::text AS ad_product,
@@ -114,10 +114,10 @@ SELECT DISTINCT ON (report_date, record->>'campaignId')
     (record->>'sales')::numeric(12, 2) AS sales,
     (record->>'unitsSold')::int AS units
 FROM raw.sb_campaigns
-ORDER BY report_date, record->>'campaignId', loaded_at DESC;
+ORDER BY report_date, split_part(source_file, '/', 2), record->>'campaignId', loaded_at DESC;
 
 CREATE OR REPLACE VIEW staging.stg_sd_campaigns AS
-SELECT DISTINCT ON (report_date, record->>'campaignId')
+SELECT DISTINCT ON (report_date, split_part(source_file, '/', 2), record->>'campaignId')
     report_date AS date,
     split_part(source_file, '/', 2) AS marketplace,
     'SD'::text AS ad_product,
@@ -132,12 +132,12 @@ SELECT DISTINCT ON (report_date, record->>'campaignId')
     (record->>'sales')::numeric(12, 2) AS sales,
     (record->>'unitsSold')::int AS units
 FROM raw.sd_campaigns
-ORDER BY report_date, record->>'campaignId', loaded_at DESC;
+ORDER BY report_date, split_part(source_file, '/', 2), record->>'campaignId', loaded_at DESC;
 
 -- Keyword and target reports --------------------------------------------------------------
 
 CREATE OR REPLACE VIEW staging.stg_sp_targeting AS
-SELECT DISTINCT ON (report_date, record->>'campaignId', record->>'keywordId')
+SELECT DISTINCT ON (report_date, split_part(source_file, '/', 2), record->>'campaignId', record->>'keywordId')
     report_date AS date,
     split_part(source_file, '/', 2) AS marketplace,
     'SP'::text AS ad_product,
@@ -152,10 +152,10 @@ SELECT DISTINCT ON (report_date, record->>'campaignId', record->>'keywordId')
     (record->>'purchases7d')::int AS orders,
     (record->>'sales7d')::numeric(12, 2) AS sales
 FROM raw.sp_targeting
-ORDER BY report_date, record->>'campaignId', record->>'keywordId', loaded_at DESC;
+ORDER BY report_date, split_part(source_file, '/', 2), record->>'campaignId', record->>'keywordId', loaded_at DESC;
 
 CREATE OR REPLACE VIEW staging.stg_sb_targeting AS
-SELECT DISTINCT ON (report_date, record->>'campaignId', record->>'keywordId')
+SELECT DISTINCT ON (report_date, split_part(source_file, '/', 2), record->>'campaignId', record->>'keywordId')
     report_date AS date,
     split_part(source_file, '/', 2) AS marketplace,
     'SB'::text AS ad_product,
@@ -170,10 +170,10 @@ SELECT DISTINCT ON (report_date, record->>'campaignId', record->>'keywordId')
     (record->>'purchases')::int AS orders,
     (record->>'sales')::numeric(12, 2) AS sales
 FROM raw.sb_targeting
-ORDER BY report_date, record->>'campaignId', record->>'keywordId', loaded_at DESC;
+ORDER BY report_date, split_part(source_file, '/', 2), record->>'campaignId', record->>'keywordId', loaded_at DESC;
 
 CREATE OR REPLACE VIEW staging.stg_sd_targeting AS
-SELECT DISTINCT ON (report_date, record->>'campaignId', record->>'targetingId')
+SELECT DISTINCT ON (report_date, split_part(source_file, '/', 2), record->>'campaignId', record->>'targetingId')
     report_date AS date,
     split_part(source_file, '/', 2) AS marketplace,
     'SD'::text AS ad_product,
@@ -192,12 +192,12 @@ SELECT DISTINCT ON (report_date, record->>'campaignId', record->>'targetingId')
     (record->>'purchases')::int AS orders,
     (record->>'sales')::numeric(12, 2) AS sales
 FROM raw.sd_targeting
-ORDER BY report_date, record->>'campaignId', record->>'targetingId', loaded_at DESC;
+ORDER BY report_date, split_part(source_file, '/', 2), record->>'campaignId', record->>'targetingId', loaded_at DESC;
 
 -- Advertised product reports (Sponsored Brands has none: Amazon reports its spend per campaign)
 
 CREATE OR REPLACE VIEW staging.stg_sp_advertised_product AS
-SELECT DISTINCT ON (report_date, record->>'adId')
+SELECT DISTINCT ON (report_date, split_part(source_file, '/', 2), record->>'adId')
     report_date AS date,
     split_part(source_file, '/', 2) AS marketplace,
     'SP'::text AS ad_product,
@@ -212,10 +212,10 @@ SELECT DISTINCT ON (report_date, record->>'adId')
     (record->>'purchases7d')::int AS orders,
     (record->>'sales7d')::numeric(12, 2) AS sales
 FROM raw.sp_advertised_product
-ORDER BY report_date, record->>'adId', loaded_at DESC;
+ORDER BY report_date, split_part(source_file, '/', 2), record->>'adId', loaded_at DESC;
 
 CREATE OR REPLACE VIEW staging.stg_sd_advertised_product AS
-SELECT DISTINCT ON (report_date, record->>'adId')
+SELECT DISTINCT ON (report_date, split_part(source_file, '/', 2), record->>'adId')
     report_date AS date,
     split_part(source_file, '/', 2) AS marketplace,
     'SD'::text AS ad_product,
@@ -230,4 +230,4 @@ SELECT DISTINCT ON (report_date, record->>'adId')
     (record->>'purchases')::int AS orders,
     (record->>'sales')::numeric(12, 2) AS sales
 FROM raw.sd_advertised_product
-ORDER BY report_date, record->>'adId', loaded_at DESC;
+ORDER BY report_date, split_part(source_file, '/', 2), record->>'adId', loaded_at DESC;
