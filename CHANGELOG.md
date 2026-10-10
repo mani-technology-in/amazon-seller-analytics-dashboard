@@ -6,6 +6,12 @@ All notable changes to this project. The format follows [Keep a Changelog](https
 
 Version 1.1 (change request CR-1): a redesign to match the Amazon section of manitechnology.com, with Sales, Profit and Reports pages and six marketplaces.
 
+### Added
+
+- Synthetic data for six marketplaces (US, Canada, Mexico, UK, Germany, France) on five fulfilment networks, each in its own currency with Amazon's marketplace IDs. Mexico and France open during the year and ramp up; the UK and Germany run Sponsored Products ads; Germany and France share EU stock. Monthly exchange rates convert everything to USD.
+- New marts `dim_marketplace` and `dim_fx_monthly`; every fact table has a `marketplace` (inventory: `network`) column.
+- The US data is byte-identical to 1.0.0, and the dashboard's export stays US-only until the new screens, so the live site does not change yet.
+
 ### Security
 
 - A **Security** check runs on every pull request: gitleaks (secrets), osv-scanner (dependencies), zizmor (workflows) and Semgrep (code).

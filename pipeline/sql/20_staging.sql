@@ -1,8 +1,17 @@
 -- Staging layer: typed, snake_case views over the raw report records.
 -- If the same record is loaded twice (same natural key), the most recently loaded one wins.
--- Money is numeric(12,2) in USD. Ad "orders" and "sales" are each ad type's own attribution:
--- 7-day for Sponsored Products (purchases7d, sales7d), 14-day for Sponsored Brands and
--- Sponsored Display (purchases, sales).
+-- The marketplace (or, for inventory, the fulfilment network) comes from the file's folder,
+-- e.g. sales_traffic/UK/2026-09-30.json. Money is numeric(12,2) in the marketplace's own
+-- currency; conversion to USD happens in the dashboard and the parity check. Ad "orders" and
+-- "sales" are each ad type's own attribution: 7-day for Sponsored Products (purchases7d,
+-- sales7d), 14-day for Sponsored Brands and Sponsored Display (purchases, sales).
+--
+-- The views are rebuilt from scratch each run, so a column can be added anywhere in a view
+-- (CREATE OR REPLACE VIEW can only add columns at the end). Nothing outside staging depends on
+-- these views: the marts are tables.
+
+DROP SCHEMA IF EXISTS staging CASCADE;
+CREATE SCHEMA staging;
 
 CREATE OR REPLACE VIEW staging.stg_products AS
 SELECT DISTINCT ON (record->>'asin')
@@ -16,25 +25,47 @@ SELECT DISTINCT ON (record->>'asin')
 FROM raw.products
 ORDER BY record->>'asin', loaded_at DESC;
 
+CREATE OR REPLACE VIEW staging.stg_marketplaces AS
+SELECT DISTINCT ON (record->>'code')
+    record->>'code' AS marketplace,
+    record->>'marketplaceId' AS marketplace_id,
+    record->>'name' AS name,
+    record->>'currencyCode' AS currency,
+    record->>'fulfillmentNetwork' AS network,
+    (record->>'adsProfile')::boolean AS has_ads
+FROM raw.marketplaces
+ORDER BY record->>'code', loaded_at DESC;
+
+CREATE OR REPLACE VIEW staging.stg_fx_rates AS
+SELECT DISTINCT ON (record->>'month', record->>'currency')
+    record->>'month' AS year_month,
+    record->>'currency' AS currency,
+    (record->>'usd_rate')::numeric(12, 6) AS usd_rate
+FROM raw.fx_rates
+ORDER BY record->>'month', record->>'currency', loaded_at DESC;
+
 CREATE OR REPLACE VIEW staging.stg_sales_traffic AS
-SELECT DISTINCT ON (report_date, record->>'childAsin')
+SELECT DISTINCT ON (report_date, split_part(source_file, '/', 2), record->>'childAsin')
     report_date AS date,
+    split_part(source_file, '/', 2) AS marketplace,
     record->>'childAsin' AS asin,
     record->>'parentAsin' AS parent_asin,
     record->>'sku' AS sku,
     (record #>> '{salesByAsin,unitsOrdered}')::int AS units,
     (record #>> '{salesByAsin,totalOrderItems}')::int AS orders,
     (record #>> '{salesByAsin,orderedProductSales,amount}')::numeric(12, 2) AS sales,
+    record #>> '{salesByAsin,orderedProductSales,currencyCode}' AS currency,
     (record #>> '{trafficByAsin,sessions}')::int AS sessions,
     (record #>> '{trafficByAsin,pageViews}')::int AS page_views,
     (record #>> '{trafficByAsin,buyBoxPercentage}')::numeric(5, 2) AS buy_box_pct,
     (record #>> '{trafficByAsin,unitSessionPercentage}')::numeric(5, 2) AS unit_session_pct
 FROM raw.sales_traffic_by_asin
-ORDER BY report_date, record->>'childAsin', loaded_at DESC;
+ORDER BY report_date, split_part(source_file, '/', 2), record->>'childAsin', loaded_at DESC;
 
 CREATE OR REPLACE VIEW staging.stg_fba_inventory AS
-SELECT DISTINCT ON (report_date, record->>'sku')
+SELECT DISTINCT ON (report_date, split_part(source_file, '/', 2), record->>'sku')
     report_date AS date,
+    split_part(source_file, '/', 2) AS network,
     record->>'asin' AS asin,
     record->>'sku' AS sku,
     (record->>'afn-fulfillable-quantity')::int AS available,
@@ -45,13 +76,14 @@ SELECT DISTINCT ON (report_date, record->>'sku')
     (record->>'afn-inbound-shipped-quantity')::int AS inbound_shipped,
     (record->>'afn-inbound-receiving-quantity')::int AS inbound_receiving
 FROM raw.fba_inventory_snapshot
-ORDER BY report_date, record->>'sku', loaded_at DESC;
+ORDER BY report_date, split_part(source_file, '/', 2), record->>'sku', loaded_at DESC;
 
 -- Campaign reports -------------------------------------------------------------------------
 
 CREATE OR REPLACE VIEW staging.stg_sp_campaigns AS
 SELECT DISTINCT ON (report_date, record->>'campaignId')
     report_date AS date,
+    split_part(source_file, '/', 2) AS marketplace,
     'SP'::text AS ad_product,
     (record->>'campaignId')::bigint AS campaign_id,
     record->>'campaignName' AS campaign_name,
@@ -69,6 +101,7 @@ ORDER BY report_date, record->>'campaignId', loaded_at DESC;
 CREATE OR REPLACE VIEW staging.stg_sb_campaigns AS
 SELECT DISTINCT ON (report_date, record->>'campaignId')
     report_date AS date,
+    split_part(source_file, '/', 2) AS marketplace,
     'SB'::text AS ad_product,
     (record->>'campaignId')::bigint AS campaign_id,
     record->>'campaignName' AS campaign_name,
@@ -86,6 +119,7 @@ ORDER BY report_date, record->>'campaignId', loaded_at DESC;
 CREATE OR REPLACE VIEW staging.stg_sd_campaigns AS
 SELECT DISTINCT ON (report_date, record->>'campaignId')
     report_date AS date,
+    split_part(source_file, '/', 2) AS marketplace,
     'SD'::text AS ad_product,
     (record->>'campaignId')::bigint AS campaign_id,
     record->>'campaignName' AS campaign_name,
@@ -105,6 +139,7 @@ ORDER BY report_date, record->>'campaignId', loaded_at DESC;
 CREATE OR REPLACE VIEW staging.stg_sp_targeting AS
 SELECT DISTINCT ON (report_date, record->>'campaignId', record->>'keywordId')
     report_date AS date,
+    split_part(source_file, '/', 2) AS marketplace,
     'SP'::text AS ad_product,
     (record->>'campaignId')::bigint AS campaign_id,
     (record->>'adGroupId')::bigint AS ad_group_id,
@@ -122,6 +157,7 @@ ORDER BY report_date, record->>'campaignId', record->>'keywordId', loaded_at DES
 CREATE OR REPLACE VIEW staging.stg_sb_targeting AS
 SELECT DISTINCT ON (report_date, record->>'campaignId', record->>'keywordId')
     report_date AS date,
+    split_part(source_file, '/', 2) AS marketplace,
     'SB'::text AS ad_product,
     (record->>'campaignId')::bigint AS campaign_id,
     (record->>'adGroupId')::bigint AS ad_group_id,
@@ -139,6 +175,7 @@ ORDER BY report_date, record->>'campaignId', record->>'keywordId', loaded_at DES
 CREATE OR REPLACE VIEW staging.stg_sd_targeting AS
 SELECT DISTINCT ON (report_date, record->>'campaignId', record->>'targetingId')
     report_date AS date,
+    split_part(source_file, '/', 2) AS marketplace,
     'SD'::text AS ad_product,
     (record->>'campaignId')::bigint AS campaign_id,
     (record->>'adGroupId')::bigint AS ad_group_id,
@@ -162,6 +199,7 @@ ORDER BY report_date, record->>'campaignId', record->>'targetingId', loaded_at D
 CREATE OR REPLACE VIEW staging.stg_sp_advertised_product AS
 SELECT DISTINCT ON (report_date, record->>'adId')
     report_date AS date,
+    split_part(source_file, '/', 2) AS marketplace,
     'SP'::text AS ad_product,
     (record->>'campaignId')::bigint AS campaign_id,
     (record->>'adGroupId')::bigint AS ad_group_id,
@@ -179,6 +217,7 @@ ORDER BY report_date, record->>'adId', loaded_at DESC;
 CREATE OR REPLACE VIEW staging.stg_sd_advertised_product AS
 SELECT DISTINCT ON (report_date, record->>'adId')
     report_date AS date,
+    split_part(source_file, '/', 2) AS marketplace,
     'SD'::text AS ad_product,
     (record->>'campaignId')::bigint AS campaign_id,
     (record->>'adGroupId')::bigint AS ad_group_id,

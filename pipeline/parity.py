@@ -5,6 +5,9 @@
 The web app computes the same metrics in TypeScript from the exported JSON files. The parity
 test (web/src/metrics/parity.test.ts) checks both give the same numbers, so every figure on the
 dashboard traces back to the database. Definitions: docs/metric-definitions.md.
+
+Until the dashboard shows every marketplace (CR-1), it reads the US marketplace only, so the
+parity queries do too.
 """
 
 import argparse
@@ -32,12 +35,14 @@ ACCOUNT_SQL = """
 WITH s AS (
     SELECT coalesce(sum(sales), 0) AS sales, coalesce(sum(orders), 0) AS orders,
            coalesce(sum(units), 0) AS units
-    FROM marts.fct_sales_daily WHERE date BETWEEN %(start)s AND %(end)s
+    FROM marts.fct_sales_daily
+    WHERE marketplace = 'US' AND date BETWEEN %(start)s AND %(end)s
 ), a AS (
     SELECT coalesce(sum(cost), 0) AS ad_spend, coalesce(sum(sales), 0) AS ad_sales,
            coalesce(sum(orders), 0) AS ad_orders, coalesce(sum(impressions), 0) AS impressions,
            coalesce(sum(clicks), 0) AS clicks
-    FROM marts.fct_ads_campaign_daily WHERE date BETWEEN %(start)s AND %(end)s
+    FROM marts.fct_ads_campaign_daily
+    WHERE marketplace = 'US' AND date BETWEEN %(start)s AND %(end)s
 )
 SELECT s.sales, s.orders, s.units, a.ad_spend, a.ad_sales, a.ad_orders, a.impressions, a.clicks,
        a.ad_spend / nullif(a.ad_sales, 0) AS acos,
@@ -62,6 +67,7 @@ WITH t AS (
     FROM marts.dim_campaign c
     LEFT JOIN marts.fct_ads_campaign_daily f
         ON f.campaign_id = c.campaign_id AND f.date BETWEEN %(start)s AND %(end)s
+    WHERE c.marketplace = 'US'
     GROUP BY c.campaign_id
 )
 SELECT campaign_id::text AS key, impressions, clicks, cost, orders, sales, {AD_RATIOS}
@@ -78,6 +84,7 @@ WITH t AS (
     LEFT JOIN marts.fct_ads_target_daily f
         ON f.campaign_id = d.campaign_id AND f.target_id = d.target_id
        AND f.date BETWEEN %(start)s AND %(end)s
+    WHERE d.marketplace = 'US'
     GROUP BY d.campaign_id, d.target_id
 )
 SELECT campaign_id::text || ':' || target_id::text AS key,
@@ -91,10 +98,12 @@ PRODUCTS_SQL = """
 WITH s AS (
     SELECT asin, sum(sales) AS sales, sum(units) AS units, sum(orders) AS orders,
            sum(sessions) AS sessions
-    FROM marts.fct_sales_daily WHERE date BETWEEN %(start)s AND %(end)s GROUP BY asin
+    FROM marts.fct_sales_daily
+    WHERE marketplace = 'US' AND date BETWEEN %(start)s AND %(end)s GROUP BY asin
 ), a AS (
     SELECT asin, sum(cost) AS ad_spend, sum(sales) AS ad_sales
-    FROM marts.fct_ads_product_daily WHERE date BETWEEN %(start)s AND %(end)s GROUP BY asin
+    FROM marts.fct_ads_product_daily
+    WHERE marketplace = 'US' AND date BETWEEN %(start)s AND %(end)s GROUP BY asin
 )
 SELECT p.asin AS key,
        coalesce(s.sales, 0) AS sales, coalesce(s.units, 0) AS units,
@@ -111,7 +120,7 @@ INVENTORY_SQL = """
 WITH u AS (
     SELECT asin, sum(units)::numeric / %(window)s AS avg_daily_units
     FROM marts.fct_sales_daily
-    WHERE date BETWEEN %(as_of)s::date - (%(window)s - 1) AND %(as_of)s
+    WHERE marketplace = 'US' AND date BETWEEN %(as_of)s::date - (%(window)s - 1) AND %(as_of)s
     GROUP BY asin
 )
 SELECT i.asin AS key, i.available, i.reserved, i.inbound,
@@ -123,7 +132,7 @@ SELECT i.asin AS key, i.available, i.reserved, i.inbound,
        ) AS low_stock
 FROM marts.fct_inventory_daily i
 LEFT JOIN u USING (asin)
-WHERE i.date = %(as_of)s
+WHERE i.network = 'US' AND i.date = %(as_of)s
 """
 
 

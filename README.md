@@ -84,18 +84,20 @@ Pull requests deploy to a preview (`https://pr-<number>.<project>.pages.dev`); m
 
 ## Synthetic data
 
-`make data` generates 12 months of daily data (1 Oct 2025 to 30 Sep 2026) for a fictional brand with 40 products in four categories and 18 ad campaigns. The same seed always produces byte-identical files.
+`make data` generates 12 months of daily data (1 Oct 2025 to 30 Sep 2026) for a fictional brand with 40 products in four categories, sold in six Amazon marketplaces: US, Canada, Mexico, UK, Germany and France. The same seed always produces byte-identical files, and the US files are byte-identical to v1.0.
 
 | File | Shaped like |
 | --- | --- |
-| `sales_traffic/YYYY-MM-DD.json` | SP-API `GET_SALES_AND_TRAFFIC_REPORT` (daily, by child ASIN) |
-| `fba_inventory/YYYY-MM-DD.tsv` | SP-API `GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA` |
-| `ads/spCampaigns.json.gz` and seven more | Amazon Ads v3 reports for Sponsored Products, Sponsored Brands and Sponsored Display (`timeUnit` DAILY, GZIP_JSON) |
-| `products.json` | The product catalog |
+| `sales_traffic/<MKT>/YYYY-MM-DD.json` | SP-API `GET_SALES_AND_TRAFFIC_REPORT` (daily, by child ASIN), one folder per marketplace, money in its own currency |
+| `fba_inventory/<NETWORK>/YYYY-MM-DD.tsv` | SP-API `GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA`, one folder per fulfilment network (US, CA, MX, UK, EU; Germany and France share EU stock) |
+| `ads/<MKT>/spCampaigns.json.gz` and seven more | Amazon Ads v3 reports (`timeUnit` DAILY, GZIP_JSON). US has 18 campaigns across Sponsored Products, Brands and Display; UK and Germany have 10 Sponsored Products campaigns each; no ads in CA, MX or FR |
+| `marketplaces.json` | Each marketplace's Amazon marketplace ID, currency and fulfilment network |
+| `fx/rates.csv` | Monthly USD rate for CAD, MXN, GBP and EUR (synthetic, near real levels) |
+| `products.json` | The product catalog, with each marketplace's local price |
 
-The data includes a weekly pattern, a Q4 peak, a January dip, Prime Day and Black Friday spikes with deal prices, two product launches, three stockouts caused by late shipments, and a few broad or phrase keywords that spend a few hundred dollars a year without selling. Ad budgets follow a seasonal pattern (pushed in Q4 and around Prime Day, cut in January), so TACoS moves between about 9% and 14% by month. Ads stop serving while a product is out of stock. Campaign, targeting and advertised-product reports add up to the same totals, and ad orders never exceed total orders.
+The data includes a weekly pattern, a Q4 peak, a January dip, Prime Day and Black Friday spikes with deal prices, two product launches, stockouts caused by late shipments (three in the US, one each in the UK and EU networks), and a few broad or phrase keywords that spend a few hundred dollars a year without selling. Mexico opens in April 2026 and France in February 2026, both ramping up. Over the last 30 days the US is about 60% of revenue, the UK and Germany about 12% each, and Canada, France and Mexico the rest. Ad budgets follow a seasonal pattern (pushed in Q4 and around Prime Day, cut in January), so US TACoS moves between about 9% and 14% by month. Ads stop serving while a product is out of stock. Campaign, targeting and advertised-product reports add up to the same totals, and ad orders never exceed total orders.
 
-Each file is loaded into the `raw` schema unchanged (one JSON record per row, with Amazon's own field names), so a real SP-API or Ads connector could load the same tables.
+Each file is loaded into the `raw` schema unchanged (one JSON record per row, with Amazon's own field names), so a real SP-API or Ads connector could load the same tables. The marketplace comes from the file's folder.
 
 ## Data model
 
@@ -103,11 +105,11 @@ Each file is loaded into the `raw` schema unchanged (one JSON record per row, wi
 | --- | --- |
 | `raw` | One row per report record, stored as received (JSON with Amazon's field names) |
 | `staging` | Views that type and rename each report (`stg_*`) and keep only the newest copy of a record that was loaded twice |
-| `marts` | `dim_date`, `dim_product`, `dim_campaign`, `dim_target`; daily facts `fct_sales_daily`, `fct_ads_campaign_daily`, `fct_ads_target_daily`, `fct_ads_product_daily`, `fct_inventory_daily` |
+| `marts` | `dim_date`, `dim_product`, `dim_marketplace`, `dim_fx_monthly`, `dim_campaign`, `dim_target`; daily facts `fct_sales_daily`, `fct_ads_campaign_daily`, `fct_ads_target_daily`, `fct_ads_product_daily` (each with a `marketplace` column) and `fct_inventory_daily` (with a `network` column). Money stays in local currency; `dim_fx_monthly` converts it to USD |
 
 Product-level ad spend covers Sponsored Products and Sponsored Display only, because Amazon reports Sponsored Brands spend per campaign. Account totals include all three ad types.
 
-The export writes one compact JSON file per mart (one array per field; Amazon IDs as strings) plus `manifest.json` with the data's date range. Opening a page downloads about 230–550 KB compressed (code plus that page's data), measured with Playwright against a production build; the Advertising page is the largest because of the daily keyword data.
+The export writes one compact JSON file per mart (one array per field; Amazon IDs as strings) plus `manifest.json` with the data's date range, `marketplaces.json` and `fx_monthly.json`. Until the new screens arrive, the v1.0 files hold US data only, so the live dashboard is unchanged. Opening a page downloads about 230–550 KB compressed (code plus that page's data), measured with Playwright against a production build; the Advertising page is the largest because of the daily keyword data.
 
 ## Metrics
 

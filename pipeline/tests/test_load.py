@@ -14,13 +14,15 @@ def _counts() -> dict[str, int]:
         return out
 
 
-def test_load_keeps_every_record_and_is_repeatable(sim, tmp_path):
-    written = write_all(sim, tmp_path)
+def test_load_keeps_every_record_and_is_repeatable(world, tmp_path):
+    written = write_all(world, tmp_path)
     loaded = load(tmp_path)
     load(tmp_path)  # second run replaces, not appends
 
     expected = {
         "products": written["products"],
+        "marketplaces": written["marketplaces"],
+        "fx_rates": written["fx_rates"],
         "sales_traffic_by_asin": written["sales_traffic"],
         "fba_inventory_snapshot": written["fba_inventory"],
         "sp_campaigns": written["spCampaigns"],
@@ -36,8 +38,8 @@ def test_load_keeps_every_record_and_is_repeatable(sim, tmp_path):
     assert _counts() == expected
 
 
-def test_raw_records_keep_amazon_field_names(sim, tmp_path):
-    write_all(sim, tmp_path)
+def test_raw_records_keep_amazon_field_names(world, tmp_path):
+    write_all(world, tmp_path)
     load(tmp_path)
     with connect() as conn, conn.cursor() as cur:
         cur.execute("SELECT record FROM raw.sp_targeting LIMIT 1")
@@ -49,4 +51,8 @@ def test_raw_records_keep_amazon_field_names(sim, tmp_path):
             "SELECT record #>> '{salesByAsin,orderedProductSales,currencyCode}' "
             "FROM raw.sales_traffic_by_asin LIMIT 1"
         )
-        assert cur.fetchone()[0] == "USD"
+        assert cur.fetchone()[0] in {"USD", "CAD", "MXN", "GBP", "EUR"}
+        cur.execute(
+            "SELECT DISTINCT split_part(source_file, '/', 2) FROM raw.sales_traffic_by_asin"
+        )
+        assert {r[0] for r in cur.fetchall()} == {"US", "CA", "MX", "UK", "DE", "FR"}
