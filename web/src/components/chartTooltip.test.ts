@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { chartTooltip } from './chartTooltip'
 
 const params = [
-  { axisValue: '2026-09-14', seriesName: 'Total sales', seriesIndex: 0, value: 1234.5 },
-  { axisValue: '2026-09-14', seriesName: 'Ad spend', seriesIndex: 1, value: null },
+  { axisValue: '2026-09-14', seriesName: 'Total sales', color: '#2a78d6', value: 1234.5 },
+  { axisValue: '2026-09-14', seriesName: 'Ad spend', color: '#eb6834', value: null },
 ]
 const format = (v: number | null) => (v === null ? '–' : `$${v.toFixed(2)}`)
 
@@ -18,11 +18,12 @@ describe('chartTooltip', () => {
     expect(el.textContent).toContain('–')
   })
 
-  it('uses no inline style attributes, so a strict Content-Security-Policy does not block it', () => {
-    const el = chartTooltip(params, format)
-    expect(el.outerHTML).not.toContain('style=')
-    expect(el.querySelectorAll('[data-series="0"]')).toHaveLength(1)
-    expect(el.querySelectorAll('[data-series="1"]')).toHaveLength(1)
+  it("gives each row a swatch in its series' colour", () => {
+    const swatches = chartTooltip(params, format).querySelectorAll<HTMLElement>('.chart-tip-swatch')
+    expect([...swatches].map((s) => s.style.backgroundColor)).toEqual([
+      'rgb(42, 120, 214)',
+      'rgb(235, 104, 52)',
+    ])
   })
 
   it('treats series names as text, never as HTML', () => {

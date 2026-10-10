@@ -9,7 +9,7 @@ import {
 } from 'echarts/components'
 import * as echarts from 'echarts/core'
 import type { ComposeOption } from 'echarts/core'
-import type { CallbackDataParams } from 'echarts/types/dist/shared'
+import type { DefaultLabelFormatterCallbackParams as CallbackDataParams } from 'echarts'
 import type { LineSeriesOption } from 'echarts/charts'
 import { SVGRenderer } from 'echarts/renderers'
 import { useEffect, useRef } from 'react'
@@ -25,7 +25,7 @@ function toTooltipItem(p: CallbackDataParams): TooltipItem {
   return {
     axisValue: String(axisValue ?? ''),
     seriesName: p.seriesName ?? '',
-    seriesIndex: p.seriesIndex ?? 0,
+    color: typeof p.color === 'string' ? p.color : '',
     value: p.value,
   }
 }
@@ -76,7 +76,6 @@ export function TrendChart({ title, dates, series, format, height = 280 }: Trend
         // our own DOM tooltip: the default one uses inline styles, which the CSP blocks
         formatter: (params) =>
           chartTooltip((Array.isArray(params) ? params : [params]).map(toTooltipItem), format),
-        className: 'chart-tip-box',
       },
       xAxis: {
         type: 'category',

@@ -111,14 +111,22 @@ test('the security headers are sent and chart tooltips break no CSP rule', async
   expect(headers['content-security-policy']).toContain("frame-ancestors 'none'")
   expect(headers['x-content-type-options']).toBe('nosniff')
   expect(headers['referrer-policy']).toBe('strict-origin-when-cross-origin')
-  for (const path of ['/', '/advertising', '/products', '/inventory']) {
+  expect(headers['strict-transport-security']).toContain('max-age=')
+
+  // A product detail page has charts too; open the first product from the table.
+  await page.goto('/products')
+  const productPath = await page.locator('tbody a').first().getAttribute('href')
+  expect(productPath).toMatch(/^\/products\/B0/)
+  for (const path of ['/', productPath!]) {
     await page.goto(path)
     await expect(page.getByRole('status')).toHaveCount(0)
-    for (const chart of await page.locator('figure svg').all()) {
-      const box = await chart.boundingBox()
-      if (!box) continue
-      await page.mouse.move(box.x + box.width * 0.6, box.y + box.height / 2)
-      await expect(page.locator('.chart-tip').first()).toBeVisible()
+    const charts = await page.locator('figure').all()
+    expect(charts.length, path).toBeGreaterThan(0)
+    for (const chart of charts) {
+      const box = await chart.locator('svg').first().boundingBox()
+      expect(box, path).not.toBeNull()
+      await page.mouse.move(box!.x + box!.width * 0.6, box!.y + box!.height / 2)
+      await expect(chart.locator('.chart-tip')).toBeVisible()
     }
   }
   expect(violations).toEqual([])

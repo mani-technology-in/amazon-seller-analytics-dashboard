@@ -107,14 +107,16 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
+          set -o pipefail
+          export WRANGLER_OUTPUT_FILE_PATH="$RUNNER_TEMP/wrangler.ndjson"
           npx --yes "$WRANGLER" pages deploy dist --project-name="$PAGES_PROJECT" \
-            --branch="$PAGES_BRANCH" --commit-dirty=true | tee deploy.log
-          # Wrangler prints this deployment's own URL first, then the branch alias (if any).
-          url="$(grep -oE 'https://[a-z0-9.-]+\.pages\.dev' deploy.log | head -1)"
-          alias="$(grep -oE 'https://[a-z0-9.-]+\.pages\.dev' deploy.log | sed -n 2p)"
-          if [ -z "$url" ]; then echo "::error::No pages.dev URL in the deploy output"; exit 1; fi
+            --branch="$PAGES_BRANCH" --commit-dirty=true
+          # Wrangler's machine-readable record of the deployment (the same one wrangler-action reads).
+          record="$(jq -c 'select(.type == "pages-deploy-detailed")' "$WRANGLER_OUTPUT_FILE_PATH" | tail -1)"
+          url="$(echo "$record" | jq -r '.url // empty')"
+          if [ -z "$url" ]; then echo "::error::No deployment URL in Wrangler's output file"; exit 1; fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "alias=$alias" >> "$GITHUB_OUTPUT"
+          echo "alias=$(echo "$record" | jq -r '.alias // empty')" >> "$GITHUB_OUTPUT"
 
       - name: Smoke test the deployed site
         working-directory: web
@@ -155,11 +157,7 @@ jobs:
             echo "$path -> $code"
             test "$code" = "200"
           done
-          # Security headers on the real domain (NFR-SEC-1).
-          headers="$(curl -sSI --max-time 15 "$SMOKE_BASE_URL/")"
-          for h in content-security-policy strict-transport-security x-content-type-options referrer-policy; do
-            echo "$headers" | grep -qi "^$h:" || { echo "::error::Missing header $h"; exit 1; }
-          done
+          # The smoke test also checks the security headers on this domain (NFR-SEC-1).
           npm run smoke
 
       - name: Summary

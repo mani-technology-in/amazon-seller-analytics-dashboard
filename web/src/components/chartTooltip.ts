@@ -4,14 +4,16 @@ import { dateLong } from '../lib/format'
 export interface TooltipItem {
   axisValue: string
   seriesName: string
-  seriesIndex: number
+  /** the series colour, as ECharts passes it */
+  color: string
   value: unknown
 }
 
 /**
- * Builds the chart tooltip as DOM nodes with classes only. ECharts' default tooltip writes
- * inline style attributes, which the site's Content-Security-Policy (style-src 'self') blocks;
- * series colours come from the stylesheet instead (`.chart-tip [data-series]`).
+ * Builds the chart tooltip as DOM nodes. ECharts' default tooltip is an HTML string with inline
+ * style attributes, which the site's Content-Security-Policy (style-src 'self') blocks. Text goes
+ * in through textContent (never parsed as HTML) and the swatch colour through the style object,
+ * which the policy allows.
  */
 export function chartTooltip(
   items: TooltipItem[],
@@ -28,7 +30,7 @@ export function chartTooltip(
     row.className = 'chart-tip-row'
     const swatch = document.createElement('span')
     swatch.className = 'chart-tip-swatch'
-    swatch.dataset.series = String(item.seriesIndex)
+    swatch.style.backgroundColor = item.color
     const name = document.createElement('span')
     name.textContent = item.seriesName
     const value = document.createElement('b')
