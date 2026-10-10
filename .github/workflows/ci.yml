@@ -151,7 +151,15 @@ jobs:
           GH_TOKEN: ${{ github.token }} # read-only; lets zizmor verify the pinned SHAs online
         run: pipx run zizmor==1.30.1 --min-severity medium .
       - name: Code (Semgrep 1.180.0, high severity)
-        run: pipx run semgrep==1.180.0 scan --metrics=off --config p/default --severity ERROR --error pipeline web .github
+        run: |
+          set +e
+          pipx run semgrep==1.180.0 scan --metrics=off --config p/default --severity ERROR --error \
+            --json --output semgrep.json pipeline web .github
+          code=$?
+          # Show each finding and error as an annotation on the pull request.
+          jq -r '.results[] | "::error file=\(.path),line=\(.start.line)::\(.check_id): \(.extra.message | gsub("\n"; " ") | .[0:300])"' semgrep.json
+          jq -r '.errors[] | "::warning::Semgrep error: \(.type // "") \(.message // "" | gsub("\n"; " ") | .[0:300])"' semgrep.json
+          exit $code
       - name: No Satoshi font files (its licence forbids public copies)
         run: |
           found="$(git ls-files | grep -iE 'satoshi.*\.(woff2?|ttf|otf|eot)$' || true)"
