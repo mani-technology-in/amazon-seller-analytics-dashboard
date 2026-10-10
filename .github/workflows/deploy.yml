@@ -145,8 +145,8 @@ jobs:
           # switched over; wait until it serves this build's data before checking it.
           expected=$(python3 -c "import json;print(json.load(open('dist/data/manifest.json'))['generatedAt'])")
           for i in $(seq 1 30); do
-            live=$(curl -sS --max-time 15 "$SMOKE_BASE_URL/data/manifest.json" \
-              | python3 -c "import json,sys;print(json.load(sys.stdin)['generatedAt'])" || true)
+            curl -sS --max-time 15 -o live-manifest.json "$SMOKE_BASE_URL/data/manifest.json" || true
+            live=$(python3 -c "import json;print(json.load(open('live-manifest.json'))['generatedAt'])" || true)
             [ "$live" = "$expected" ] && break
             echo "Waiting for $SMOKE_BASE_URL to serve this build ($live != $expected)"
             sleep 10

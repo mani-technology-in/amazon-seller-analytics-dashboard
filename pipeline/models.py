@@ -3,6 +3,8 @@
 python models.py
 """
 
+from psycopg import sql
+
 from db import connect, run_sql_file
 
 SCRIPTS = ["20_staging.sql", "30_marts.sql"]
@@ -28,7 +30,10 @@ def build() -> dict[str, int]:
         with conn.cursor() as cur:
             counts = {}
             for table in MART_TABLES:
-                cur.execute(f"SELECT count(*) FROM marts.{table}")
+                query = sql.SQL("SELECT count(*) FROM {}").format(sql.Identifier("marts", table))
+                # Not SQLAlchemy and not string-built (sql.Identifier): the rule misfires.
+                # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query
+                cur.execute(query)
                 counts[table] = cur.fetchone()[0]
     return counts
 

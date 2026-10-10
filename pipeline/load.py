@@ -13,7 +13,7 @@ from collections.abc import Iterator
 from datetime import date
 from pathlib import Path
 
-from psycopg import Connection
+from psycopg import Connection, sql
 
 from db import apply_schemas, connect, run_sql_file
 
@@ -67,8 +67,13 @@ def ads_report(src: Path, report_type: str) -> Iterator[Row]:
 def copy_rows(conn: Connection, table: str, rows: Iterator[Row]) -> int:
     n = 0
     with conn.cursor() as cur:
-        cur.execute(f"TRUNCATE raw.{table}")
-        with cur.copy(f"COPY raw.{table} (report_date, source_file, record) FROM STDIN") as copy:
+        target = sql.Identifier("raw", table)  # a quoted identifier, never string-formatted SQL
+        truncate = sql.SQL("TRUNCATE {}").format(target)
+        # Not SQLAlchemy and not string-built (psycopg sql.Identifier), so the rule misfires:
+        # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query
+        cur.execute(truncate)
+        copy_sql = sql.SQL("COPY {} (report_date, source_file, record) FROM STDIN").format(target)
+        with cur.copy(copy_sql) as copy:
             for row in rows:
                 copy.write_row(row)
                 n += 1
