@@ -104,7 +104,15 @@ def launch_factor(catalog: Catalog, days: list[date]) -> np.ndarray:
     return f
 
 
-def simulate(rng: np.random.Generator, catalog: Catalog) -> Simulation:
+def simulate(
+    rng: np.random.Generator,
+    catalog: Catalog,
+    organic_factor: np.ndarray | None = None,
+    stockout_ranks: tuple[int, ...] = config.STOCKOUT_ASIN_RANKS,
+) -> Simulation:
+    """`organic_factor` (per day) scales organic demand, e.g. a second marketplace opening on
+    the same fulfilment network; None leaves demand as it is. `stockout_ranks` are the products
+    (by sales rank) that get one late shipment and run out of stock."""
     days = day_list()
     n_days, n_products = len(days), len(catalog.products)
     season = seasonality(days)
@@ -146,13 +154,15 @@ def simulate(rng: np.random.Generator, catalog: Catalog) -> Simulation:
         * launch
         * deal_boost
     )
+    if organic_factor is not None:
+        organic_mean = organic_mean * organic_factor[None, :]
     organic_orders = rng.poisson(organic_mean)
     organic_units = organic_orders + rng.binomial(organic_orders, config.UNITS_PER_ORDER_EXTRA)
     planned_units = organic_units + ad_units
 
     # --- Inventory: decide how much of each day's demand can ship --------------------------
     fill, stock_end, shipments, organic_orders, organic_units = _plan_inventory(
-        rng, catalog, days, organic_orders, organic_units, ads
+        rng, catalog, days, organic_orders, organic_units, ads, stockout_ranks
     )
     for a in ads:
         _apply_fill(a, fill, price_cents)
@@ -249,7 +259,7 @@ def _apply_fill(a: AdCells, fill: np.ndarray, price_cents: np.ndarray) -> None:
     a.sales_cents[:] = a.units * price_cents[a.product_idx][None, :, :]
 
 
-def _plan_inventory(rng, catalog, days, organic_orders, organic_units, ads):
+def _plan_inventory(rng, catalog, days, organic_orders, organic_units, ads, stockout_ranks):
     """Reorder with a perfect forecast, except for a few late shipments that cause stockouts.
 
     Returns the share of each day's demand that ships (1 = all, 0 = out of stock), end-of-day
@@ -263,7 +273,7 @@ def _plan_inventory(rng, catalog, days, organic_orders, organic_units, ads):
     fill = np.ones((n_products, n_days))
     stock_end = np.zeros((n_products, n_days), dtype=np.int64)
     shipments: list[list[Shipment]] = [[] for _ in range(n_products)]
-    late = dict(zip(config.STOCKOUT_ASIN_RANKS, (120, 200, 260), strict=True))
+    late = dict(zip(stockout_ranks, (120, 200, 260)[: len(stockout_ranks)], strict=True))
 
     # Ad cells per product: (orders, units) arrays shaped (targets, days).
     ad_cells: list[list[tuple[np.ndarray, np.ndarray]]] = [[] for _ in range(n_products)]

@@ -60,14 +60,14 @@ def test_ads_reports_use_amazon_v3_columns(ads):
 
 
 def test_fba_report_header(output):
-    first = next(iter(sorted((output / "fba_inventory").glob("*.tsv"))))
+    first = next(iter(sorted((output / "fba_inventory" / "US").glob("*.tsv"))))
     assert first.read_text(encoding="utf-8").splitlines()[0].split("\t") == FBA_COLUMNS
 
 
 def test_sales_and_traffic_report_shape(output):
     import json
 
-    report = json.loads((output / "sales_traffic" / "2026-01-15.json").read_text())
+    report = json.loads((output / "sales_traffic" / "US" / "2026-01-15.json").read_text())
     spec = report["reportSpecification"]
     assert spec["reportType"] == "GET_SALES_AND_TRAFFIC_REPORT"
     assert spec["reportOptions"] == {"dateGranularity": "DAY", "asinGranularity": "CHILD"}
@@ -247,7 +247,7 @@ def test_most_campaigns_run_between_15_and_45_percent_acos(ads):
 
 
 def test_twelve_months_of_data(output):
-    days = sorted(p.stem for p in (output / "sales_traffic").glob("*.json"))
+    days = sorted(p.stem for p in (output / "sales_traffic" / "US").glob("*.json"))
     assert days[0] == config.START_DATE.isoformat()
     assert days[-1] == config.END_DATE.isoformat()
     assert len(days) == (config.END_DATE - config.START_DATE).days + 1 == 365

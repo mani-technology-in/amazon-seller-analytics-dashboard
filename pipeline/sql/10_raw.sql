@@ -16,7 +16,14 @@ CREATE TABLE IF NOT EXISTS raw.products (
     loaded_at timestamptz NOT NULL DEFAULT now()
 );
 
--- SP-API GET_SALES_AND_TRAFFIC_REPORT, one record per child ASIN per day
+-- The seller's marketplaces (marketplaces.json) and monthly exchange rates (fx/rates.csv):
+-- the seller's own reference data, not Amazon reports.
+CREATE TABLE IF NOT EXISTS raw.marketplaces (LIKE raw.products INCLUDING DEFAULTS);
+CREATE TABLE IF NOT EXISTS raw.fx_rates (LIKE raw.products INCLUDING DEFAULTS);
+
+-- SP-API GET_SALES_AND_TRAFFIC_REPORT, one record per child ASIN per day per marketplace.
+-- The marketplace is the report's marketplaceIds option; source_file names it
+-- (sales_traffic/<code>/...). Ads and inventory files are named the same way.
 CREATE TABLE IF NOT EXISTS raw.sales_traffic_by_asin (
     report_date date NOT NULL,
     source_file text NOT NULL,
