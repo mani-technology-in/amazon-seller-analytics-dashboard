@@ -94,6 +94,45 @@ test('every page passes an automated accessibility check (WCAG 2.1 AA)', async (
   }
 })
 
+test('the security headers are sent and chart tooltips break no CSP rule', async ({ page }) => {
+  const violations: string[] = []
+  await page.exposeFunction('reportCsp', (v: string) => violations.push(v))
+  await page.addInitScript(() => {
+    document.addEventListener('securitypolicyviolation', (e) =>
+      (window as unknown as { reportCsp: (v: string) => void }).reportCsp(
+        `${e.violatedDirective} ${e.blockedURI}`,
+      ),
+    )
+  })
+  const errors = watchErrors(page)
+  const response = await page.goto('/')
+  const headers = response!.headers()
+  expect(headers['content-security-policy']).toContain("style-src 'self'")
+  expect(headers['content-security-policy']).toContain("frame-ancestors 'none'")
+  expect(headers['x-content-type-options']).toBe('nosniff')
+  expect(headers['referrer-policy']).toBe('strict-origin-when-cross-origin')
+  expect(headers['strict-transport-security']).toContain('max-age=')
+
+  // A product detail page has charts too; open the first product from the table.
+  await page.goto('/products')
+  const productPath = await page.locator('tbody a').first().getAttribute('href')
+  expect(productPath).toMatch(/^\/products\/B0/)
+  for (const path of ['/', productPath!]) {
+    await page.goto(path)
+    await expect(page.getByRole('status')).toHaveCount(0)
+    const charts = await page.locator('figure').all()
+    expect(charts.length, path).toBeGreaterThan(0)
+    for (const chart of charts) {
+      const box = await chart.locator('svg').first().boundingBox()
+      expect(box, path).not.toBeNull()
+      await page.mouse.move(box!.x + box!.width * 0.6, box!.y + box!.height / 2)
+      await expect(chart.locator('.chart-tip')).toBeVisible()
+    }
+  }
+  expect(violations).toEqual([])
+  expect(errors).toEqual([])
+})
+
 test('a table exports CSV', async ({ page }) => {
   await page.goto('/inventory')
   const [download] = await Promise.all([
