@@ -8,7 +8,7 @@ export function ReduceMotionSwitch() {
     <Switch.Root
       checked={on}
       onCheckedChange={setReduceMotion}
-      className="group inline-flex min-h-8 cursor-pointer items-center gap-2 text-small text-ink-2"
+      className="group inline-flex min-h-9 cursor-pointer items-center gap-2 text-small text-ink-2"
     >
       <span
         aria-hidden="true"

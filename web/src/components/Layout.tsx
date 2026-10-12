@@ -130,9 +130,7 @@ export function PageTitle({ title, children }: { title: string; children?: React
   return (
     <div className="space-y-1">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-        <h1 className="text-[22px] leading-(--text-page-title--line-height) font-bold tracking-(--text-page-title--letter-spacing) md:text-page-title">
-          {title}
-        </h1>
+        <h1 className="text-page-title-phone md:text-page-title">{title}</h1>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className="inline-flex h-7 items-center gap-1.5 rounded-pill bg-surface-page px-2.5 text-caption text-ink-2 ring-1 ring-line">
             <span aria-hidden="true" className="size-1.5 rounded-pill bg-accent" />

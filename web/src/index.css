@@ -39,10 +39,18 @@
   --text-page-title--line-height: 1.15;
   --text-page-title--font-weight: 700;
   --text-page-title--letter-spacing: -0.02em;
+  --text-page-title-phone: 22px;
+  --text-page-title-phone--line-height: 1.15;
+  --text-page-title-phone--font-weight: 700;
+  --text-page-title-phone--letter-spacing: -0.02em;
   --text-kpi-number: 26px;
   --text-kpi-number--line-height: 1;
   --text-kpi-number--font-weight: 600;
   --text-kpi-number--letter-spacing: -0.02em;
+  --text-kpi-number-phone: 22px;
+  --text-kpi-number-phone--line-height: 1;
+  --text-kpi-number-phone--font-weight: 700;
+  --text-kpi-number-phone--letter-spacing: -0.02em;
   --text-section-title: 15px;
   --text-section-title--line-height: 1.35;
   --text-section-title--font-weight: 600;
@@ -96,22 +104,21 @@
     font-size: var(--text-body);
     line-height: var(--text-body--line-height);
   }
+  a,
+  button,
+  input,
+  select,
+  summary {
+    touch-action: manipulation;
+  }
   :focus-visible {
     outline: 2px solid var(--color-accent-strong);
     outline-offset: 2px;
   }
 }
 
-/* Motion (standards 6). The "Reduce motion" switch sets data-reduce-motion on <html>; the
-   system setting does the same through the media query. Either way nothing animates. */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  ::before,
-  ::after {
-    transition: none !important;
-    animation: none !important;
-  }
-}
+/* Motion (standards 6). The "Reduce motion" switch (src/app/motion.ts, which starts from the
+   system setting) sets data-reduce-motion on <html>; while it is there nothing animates. */
 [data-reduce-motion] *,
 [data-reduce-motion] ::before,
 [data-reduce-motion] ::after {

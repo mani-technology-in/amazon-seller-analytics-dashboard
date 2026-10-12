@@ -76,3 +76,32 @@ test('the side navigation becomes a row above the page at phone width @phone', a
     expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(36) // touch target
   }
 })
+
+test('page changes cross-fade, except with Reduce motion on', async ({ page }) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as { transitions: number }
+    w.transitions = 0
+    const original = document.startViewTransition?.bind(document)
+    if (original) {
+      document.startViewTransition = ((cb: () => void) => {
+        w.transitions += 1
+        return original(cb)
+      }) as typeof document.startViewTransition
+    }
+  })
+  await page.goto('/')
+  const supported = await page.evaluate(() => 'startViewTransition' in document)
+  test.skip(!supported, 'this browser has no View Transitions API; pages change without one')
+  const nav = page.getByRole('navigation', { name: 'Pages' })
+  const count = () =>
+    page.evaluate(() => (window as unknown as { transitions: number }).transitions)
+
+  await nav.getByRole('link', { name: 'Products' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Products' })).toBeVisible()
+  expect(await count()).toBe(1)
+
+  await page.getByRole('switch', { name: 'Reduce motion' }).click()
+  await nav.getByRole('link', { name: 'Inventory' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Inventory' })).toBeVisible()
+  expect(await count()).toBe(1)
+})

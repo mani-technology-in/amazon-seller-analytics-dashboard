@@ -1,5 +1,10 @@
 import { lazy } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import {
+  Route,
+  RouterProvider,
+  createBrowserRouter,
+  createRoutesFromElements,
+} from 'react-router-dom'
 import { DataSourceProvider } from './app/data'
 import { Layout, PageTitle } from './components/Layout'
 import type { DataSource } from './data/dataSource'
@@ -21,27 +26,24 @@ const InventoryPage = lazy(() =>
   import('./pages/InventoryPage').then((m) => ({ default: m.InventoryPage })),
 )
 
-export function AppRoutes() {
-  return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route index element={<OverviewPage />} />
-        <Route path="advertising" element={<AdvertisingPage />} />
-        <Route path="products" element={<ProductsPage />} />
-        <Route path="products/:asin" element={<ProductDetailPage />} />
-        <Route path="inventory" element={<InventoryPage />} />
-        <Route path="*" element={<PageTitle title="Page not found" />} />
-      </Route>
-    </Routes>
-  )
-}
+// A data router: React Router runs page changes through the View Transitions API only with one.
+const router = createBrowserRouter(
+  createRoutesFromElements(
+    <Route element={<Layout />}>
+      <Route index element={<OverviewPage />} />
+      <Route path="advertising" element={<AdvertisingPage />} />
+      <Route path="products" element={<ProductsPage />} />
+      <Route path="products/:asin" element={<ProductDetailPage />} />
+      <Route path="inventory" element={<InventoryPage />} />
+      <Route path="*" element={<PageTitle title="Page not found" />} />
+    </Route>,
+  ),
+)
 
 function App({ source }: { source?: DataSource }) {
   return (
     <DataSourceProvider source={source}>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </DataSourceProvider>
   )
 }

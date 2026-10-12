@@ -1,18 +1,18 @@
 import { useSyncExternalStore } from 'react'
 
 /**
- * The "Reduce motion" setting (NFR-14). It starts from the system's reduced-motion setting,
- * the visitor's choice is remembered in this browser, and while it is on <html> carries
- * data-reduce-motion, which index.css uses to stop every transition and animation.
+ * The "Reduce motion" setting (NFR-14), the one switch for all motion. It follows the system's
+ * reduced-motion setting until the visitor flips it; their choice is then remembered in this
+ * browser. While it is on, <html> carries data-reduce-motion, which index.css uses to stop
+ * every transition and animation, and page changes skip the cross-fade.
  */
 
 const KEY = 'reduce-motion'
 
-function systemPrefersReduced(): boolean {
-  return (
-    typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  )
-}
+const query =
+  typeof window !== 'undefined'
+    ? window.matchMedia?.('(prefers-reduced-motion: reduce)')
+    : undefined
 
 function stored(): boolean | null {
   try {
@@ -23,7 +23,7 @@ function stored(): boolean | null {
   }
 }
 
-let reduced = typeof window === 'undefined' ? false : (stored() ?? systemPrefersReduced())
+let reduced = typeof window === 'undefined' ? false : (stored() ?? query?.matches ?? false)
 const listeners = new Set<() => void>()
 
 function apply() {
@@ -33,6 +33,19 @@ function apply() {
 }
 apply()
 
+function notify() {
+  apply()
+  listeners.forEach((l) => l())
+}
+
+// A system change applies while the visitor has not chosen for this site.
+query?.addEventListener?.('change', (e) => {
+  if (stored() === null) {
+    reduced = e.matches
+    notify()
+  }
+})
+
 export function setReduceMotion(on: boolean) {
   reduced = on
   try {
@@ -40,13 +53,10 @@ export function setReduceMotion(on: boolean) {
   } catch {
     // not remembered across visits; the setting still applies now
   }
-  apply()
-  listeners.forEach((l) => l())
+  notify()
 }
 
-export function reduceMotion(): boolean {
-  return reduced
-}
+const snapshot = () => reduced
 
 export function useReduceMotion(): boolean {
   return useSyncExternalStore(
@@ -54,7 +64,7 @@ export function useReduceMotion(): boolean {
       listeners.add(l)
       return () => listeners.delete(l)
     },
-    reduceMotion,
+    snapshot,
     () => false,
   )
 }
