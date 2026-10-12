@@ -16,6 +16,14 @@ updates:
     groups:
       web-minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # Major versions that break the build today; upgrade by hand when ready.
+      # TypeScript 7: typescript-eslint 8 supports TypeScript below 6.1 only.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # TanStack Table 9: a new API (no useReactTable); the tables stay on v8 by design.
+      - dependency-name: "@tanstack/react-table"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: uv
     directory: /pipeline
