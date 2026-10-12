@@ -6,7 +6,7 @@ import {
   createRoutesFromElements,
 } from 'react-router-dom'
 import { DataSourceProvider } from './app/data'
-import { Layout, PageTitle } from './components/Layout'
+import { Layout, PageLoadError, PageTitle } from './components/Layout'
 import type { DataSource } from './data/dataSource'
 
 // Each page loads its own code, so the first visit downloads only what it shows.
@@ -29,7 +29,7 @@ const InventoryPage = lazy(() =>
 // A data router: React Router runs page changes through the View Transitions API only with one.
 const router = createBrowserRouter(
   createRoutesFromElements(
-    <Route element={<Layout />}>
+    <Route element={<Layout />} errorElement={<PageLoadError />}>
       <Route index element={<OverviewPage />} />
       <Route path="advertising" element={<AdvertisingPage />} />
       <Route path="products" element={<ProductsPage />} />

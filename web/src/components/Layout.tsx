@@ -117,6 +117,26 @@ export function Loading({ what = 'data' }: { what?: string }) {
   )
 }
 
+/**
+ * Shown when a page's code cannot load, for example a tab left open across a new release whose
+ * old files are gone. Reloading fetches the current release.
+ */
+export function PageLoadError() {
+  return (
+    <div role="alert" className="mx-auto max-w-md space-y-3 px-4 py-16 text-center">
+      <h1 className="text-page-title-phone">The page did not load</h1>
+      <p className="text-small text-ink-2">Check your connection, then try again.</p>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="inline-flex h-10 items-center rounded-md bg-accent-strong px-4 font-semibold text-surface-page hover:bg-accent-strong-hover"
+      >
+        Try again
+      </button>
+    </div>
+  )
+}
+
 export function ErrorBox({ error }: { error: Error }) {
   return (
     <div role="alert" className="rounded-lg bg-critical-soft px-4 py-3 text-small text-critical">

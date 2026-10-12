@@ -114,6 +114,8 @@ test('the security headers are sent and chart tooltips break no CSP rule', async
   expect(headers['x-content-type-options']).toBe('nosniff')
   expect(headers['referrer-policy']).toBe('strict-origin-when-cross-origin')
   expect(headers['strict-transport-security']).toContain('max-age=')
+  // let the page finish loading its code before leaving it, or the aborted import is an error
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
 
   // A product detail page has charts too; open the first product from the table.
   await page.goto('/products')

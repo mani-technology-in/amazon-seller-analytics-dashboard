@@ -105,3 +105,15 @@ test('page changes cross-fade, except with Reduce motion on', async ({ page }) =
   await expect(page.getByRole('heading', { level: 1, name: 'Inventory' })).toBeVisible()
   expect(await count()).toBe(1)
 })
+
+test('a page whose code cannot load says so and offers Try again', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible()
+  await page.route('**/assets/InventoryPage-*.js', (route) => route.abort())
+  await page
+    .getByRole('navigation', { name: 'Pages' })
+    .getByRole('link', { name: 'Inventory' })
+    .click()
+  await expect(page.getByRole('heading', { level: 1, name: 'The page did not load' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible()
+})
