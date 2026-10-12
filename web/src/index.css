@@ -150,7 +150,7 @@
 /* Chart tooltip (components/chartTooltip.ts). Styled here, not inline, so the
    Content-Security-Policy can keep style-src 'self'. Swatch colours are set per series in chartTooltip.ts. */
 .chart-tip {
-  font-size: 12px;
+  font-size: var(--text-caption);
   line-height: 1.5;
   color: var(--color-ink);
 }
@@ -173,5 +173,5 @@
 .chart-tip-swatch {
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }

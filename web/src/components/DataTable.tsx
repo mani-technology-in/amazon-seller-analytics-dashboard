@@ -136,12 +136,12 @@ export function DataTable<T>({
                       aria-sort={
                         dir === 'asc' ? 'ascending' : dir === 'desc' ? 'descending' : 'none'
                       }
-                      className={`whitespace-nowrap px-3 py-2.5 font-semibold ${meta.align === 'right' ? 'text-right' : ''}`}
+                      className={`whitespace-nowrap px-3 py-0.5 font-semibold ${meta.align === 'right' ? 'text-right' : ''}`}
                     >
                       <button
                         type="button"
                         onClick={h.column.getToggleSortingHandler()}
-                        className="inline-flex items-center gap-1 hover:text-ink"
+                        className="inline-flex min-h-9 items-center gap-1 hover:text-ink"
                       >
                         {flexRender(h.column.columnDef.header, h.getContext())}
                         {meta.hint ? <span aria-hidden="true">ⓘ</span> : null}

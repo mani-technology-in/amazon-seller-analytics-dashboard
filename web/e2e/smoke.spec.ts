@@ -81,13 +81,13 @@ test('dates with no data fall back to the default range and say so', async ({ pa
   await expect(page.getByText(/^1 Sep 2026 – 30 Sep 2026$/)).toBeVisible()
 })
 
-test('every page passes an automated accessibility check (WCAG 2.1 AA)', async ({ page }) => {
+test('every page passes an automated accessibility check (WCAG 2.2 AA)', async ({ page }) => {
   for (const path of ['/', '/advertising', '/products', '/inventory']) {
     await page.goto(path)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     await expect(page.getByRole('status')).toHaveCount(0)
     const { violations } = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
       .analyze()
     expect(
       violations.map((v) => `${v.id}: ${v.help} (${v.nodes.length})`),

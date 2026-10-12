@@ -211,7 +211,7 @@ export function AdvertisingPage() {
             csvName="keywords-and-targets.csv"
             initialSort={{ id: 'cost', desc: true }}
             toolbar={
-              <label className="flex items-center gap-1.5 text-caption text-ink-2">
+              <label className="flex min-h-9 items-center gap-1.5 text-caption text-ink-2">
                 <input
                   type="checkbox"
                   checked={flaggedOnly}

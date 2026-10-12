@@ -54,10 +54,16 @@ describe('design tokens (NFR-16)', () => {
     const found = files.flatMap((f) => {
       const text = readFileSync(join(src, f), 'utf-8')
       const hits = text.match(
-        /#[0-9a-fA-F]{3,8}\b|\b(slate|gray|zinc|red|green|blue|amber)-\d{2,3}\b/g,
+        /#[0-9a-fA-F]{3,8}\b|\b(rgba?|hsla?)\(|\b(slate|gray|zinc|red|green|blue|amber)-\d{2,3}\b/g,
       )
       return hits ? [`${f}: ${hits.join(' ')}`] : []
     })
     expect(found).toEqual([])
+  })
+
+  it('the stylesheet uses colours only inside the @theme block', () => {
+    const css = readFileSync(new URL('../index.css', import.meta.url), 'utf-8')
+    const outside = css.replace(/@theme static \{[\s\S]*?\n\}/, '')
+    expect(outside.match(/#[0-9a-fA-F]{3,8}\b|\b(rgba?|hsla?)\(/g)).toBeNull()
   })
 })

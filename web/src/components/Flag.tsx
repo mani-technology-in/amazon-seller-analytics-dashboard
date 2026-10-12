@@ -8,14 +8,8 @@ const PILL = {
   warning: { icon: '▲', className: 'bg-warning-soft text-warning' },
 } as const
 
-export function Flag({
-  kind,
-  label,
-}: {
-  kind: keyof typeof PILL | 'good' | 'neutral'
-  label: string
-}) {
-  if (kind === 'good' || kind === 'neutral') {
+export function Flag({ kind, label }: { kind: keyof typeof PILL | 'good'; label: string }) {
+  if (kind === 'good') {
     return <span className="text-caption text-ink-3">{label}</span>
   }
   const s = PILL[kind]

@@ -41,7 +41,7 @@ export function KpiTile({ label, value, current, previous, better, hint, points 
   return (
     <div className="rounded-lg bg-surface-page/94 px-4 py-3.5 shadow-tile" title={hint}>
       <div className="text-small text-ink-3">{label}</div>
-      <div className="mt-1.5 w-fit bg-(image:--gradient-brand) bg-clip-text text-[22px] leading-(--text-kpi-number--line-height) font-semibold tracking-(--text-kpi-number--letter-spacing) text-transparent tabular-nums md:text-kpi-number">
+      <div className="mt-1.5 w-fit bg-(image:--gradient-brand) bg-clip-text text-kpi-number-phone text-transparent tabular-nums md:text-kpi-number">
         {value}
       </div>
       {change === undefined ? null : (

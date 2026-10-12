@@ -1,4 +1,8 @@
-import { token } from './tokens'
+import { TOKENS, token } from './tokens'
+
+const chartLabel = TOKENS.find((t) => t.path.join('.') === 'typography.chart-label')!.value as {
+  fontSize: string
+}
 
 /**
  * Chart colours and label style from the design tokens (ChartPanel in the Design System):
@@ -13,6 +17,6 @@ export const CHART = {
   label: {
     color: token('color.ink.3'),
     fontFamily: token('font.family.mono'),
-    fontSize: 11,
+    fontSize: parseFloat(chartLabel.fontSize), // ECharts' SVG text has no letter spacing
   },
 } as const

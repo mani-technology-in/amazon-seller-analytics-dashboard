@@ -117,7 +117,7 @@ export function FilterBar({
               </p>
             ) : null}
             {showCompare ? (
-              <label className="mt-1 flex items-center gap-1.5">
+              <label className="flex min-h-9 items-center gap-1.5">
                 <input
                   type="checkbox"
                   checked={filters.compare}
