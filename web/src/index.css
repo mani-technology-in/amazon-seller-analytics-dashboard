@@ -4,6 +4,8 @@
    if this block and the JSON ever differ, so change the JSON first and copy the result here.
    "static" emits every variable, so components and charts can read them all. */
 @theme static {
+  /* Only token colours exist: Tailwind's default palette is switched off. */
+  --color-*: initial;
   --color-surface-page: #ffffff;
   --color-surface-sky: #e4eeff;
   --color-surface-side: #f7faff;

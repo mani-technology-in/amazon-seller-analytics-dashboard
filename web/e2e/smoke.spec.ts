@@ -46,7 +46,7 @@ test('the Overview shows KPI values and draws both charts', async ({ page }) => 
   await expect(kpis.getByText(/^\$[\d.]+[KM]$/).first()).toBeVisible()
   await expect(page.locator('figure')).toHaveCount(2)
   // each chart draws its two series lines in the palette colours
-  for (const color of ['#2a78d6', '#eb6834']) {
+  for (const color of ['#0078f0', '#783fee']) {
     await expect(page.locator(`figure svg path[stroke="${color}"]`)).toHaveCount(2)
   }
 })
@@ -141,7 +141,7 @@ test('a table exports CSV', async ({ page }) => {
   await page.goto('/inventory')
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('button', { name: 'Export CSV' }).click(),
+    page.getByRole('button', { name: 'Download CSV' }).click(),
   ])
   expect(download.suggestedFilename()).toBe('inventory.csv')
   const stream = await download.createReadStream()

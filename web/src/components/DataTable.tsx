@@ -104,25 +104,25 @@ export function DataTable<T>({
   }
 
   return (
-    <section className="min-w-0 rounded-lg border border-slate-200 bg-white">
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
-        <h2 className="text-sm font-semibold text-slate-900">
-          {title} <span className="font-normal text-slate-500">({rows.length})</span>
+    <section className="min-w-0 rounded-lg border border-surface-sunken bg-surface-page">
+      <header className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+        <h2 className="text-section-title text-ink">
+          {title} <span className="font-normal text-ink-3">({rows.length})</span>
         </h2>
         <div className="flex flex-wrap items-center gap-3">
           {toolbar}
           <button
             type="button"
             onClick={exportCsv}
-            className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex h-9 items-center rounded-md border border-line bg-surface-page px-3 text-small font-semibold text-ink transition-transform duration-(--duration-press) ease-out hover:bg-surface-hover active:scale-[0.97]"
           >
-            Export CSV
+            Download CSV
           </button>
         </div>
       </header>
       <div className="relative max-h-[32rem] overflow-auto">
-        <table className="w-full min-w-max text-left text-sm">
-          <thead className="sticky top-0 z-10 bg-slate-50 text-xs text-slate-600">
+        <table className="w-full min-w-max text-left text-body">
+          <thead className="sticky top-0 z-10 bg-surface-side text-caption text-ink-3">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
                 {hg.headers.map((h) => {
@@ -136,16 +136,16 @@ export function DataTable<T>({
                       aria-sort={
                         dir === 'asc' ? 'ascending' : dir === 'desc' ? 'descending' : 'none'
                       }
-                      className={`whitespace-nowrap px-3 py-2 font-medium ${meta.align === 'right' ? 'text-right' : ''}`}
+                      className={`whitespace-nowrap px-3 py-2.5 font-semibold ${meta.align === 'right' ? 'text-right' : ''}`}
                     >
                       <button
                         type="button"
                         onClick={h.column.getToggleSortingHandler()}
-                        className="inline-flex items-center gap-1 hover:text-slate-900"
+                        className="inline-flex items-center gap-1 hover:text-ink"
                       >
                         {flexRender(h.column.columnDef.header, h.getContext())}
                         {meta.hint ? <span aria-hidden="true">ⓘ</span> : null}
-                        <span aria-hidden="true" className="w-3 text-slate-400">
+                        <span aria-hidden="true" className="w-3 text-accent-strong">
                           {dir === 'asc' ? '▲' : dir === 'desc' ? '▼' : ''}
                         </span>
                       </button>
@@ -158,19 +158,19 @@ export function DataTable<T>({
           <tbody>
             {ordered.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={columns.length} className="px-3 py-6 text-center text-ink-3">
                   {emptyText}
                 </td>
               </tr>
             ) : (
               ordered.map((r) => (
-                <tr key={r.id} className="border-t border-slate-100 hover:bg-slate-50">
+                <tr key={r.id} className="border-t border-surface-sunken hover:bg-surface-hover">
                   {r.getVisibleCells().map((c) => {
                     const meta = c.column.columnDef.meta as Column<T>
                     return (
                       <td
                         key={c.id}
-                        className={`whitespace-nowrap px-3 py-2 ${meta.align === 'right' ? 'text-right tabular-nums' : ''}`}
+                        className={`whitespace-nowrap px-3 py-2.5 ${meta.align === 'right' ? 'text-right font-mono text-table-number text-ink-2 tabular-nums' : 'text-ink'}`}
                       >
                         {flexRender(c.column.columnDef.cell, c.getContext())}
                       </td>

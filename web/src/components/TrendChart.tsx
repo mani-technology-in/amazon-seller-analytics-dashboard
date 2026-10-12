@@ -13,7 +13,7 @@ import type { DefaultLabelFormatterCallbackParams as CallbackDataParams } from '
 import type { LineSeriesOption } from 'echarts/charts'
 import { SVGRenderer } from 'echarts/renderers'
 import { useEffect, useRef } from 'react'
-import { SERIES_COLORS } from '../lib/colors'
+import { CHART } from '../theme/chart'
 import { chartTooltip, type TooltipItem } from './chartTooltip'
 import { dateLong, dateShort } from '../lib/format'
 
@@ -68,11 +68,12 @@ export function TrendChart({ title, dates, series, format, height = 280 }: Trend
         icon: 'roundRect',
         itemWidth: 14,
         itemHeight: 3,
-        textStyle: { color: '#52514e', fontSize: 12 },
+        textStyle: CHART.label,
+        formatter: (name: string) => name.toUpperCase(),
       },
       tooltip: {
         trigger: 'axis',
-        axisPointer: { type: 'line', lineStyle: { color: '#8a8984' } },
+        axisPointer: { type: 'line', lineStyle: { color: CHART.pointer } },
         // our own DOM tooltip: the default one uses inline styles, which the CSP blocks
         formatter: (params) =>
           chartTooltip((Array.isArray(params) ? params : [params]).map(toTooltipItem), format),
@@ -81,14 +82,18 @@ export function TrendChart({ title, dates, series, format, height = 280 }: Trend
         type: 'category',
         data: dates,
         boundaryGap: false,
-        axisLine: { lineStyle: { color: '#d6d5d0' } },
+        axisLine: { lineStyle: { color: CHART.baseline } },
         axisTick: { show: false },
-        axisLabel: { color: '#52514e', formatter: (d: string) => dateShort(d), hideOverlap: true },
+        axisLabel: {
+          ...CHART.label,
+          formatter: (d: string) => dateShort(d).toUpperCase(),
+          hideOverlap: true,
+        },
       },
       yAxis: {
         type: 'value',
-        splitLine: { lineStyle: { color: '#ebeae6' } },
-        axisLabel: { color: '#52514e', formatter: (v: number) => format(v) },
+        splitLine: { lineStyle: { color: CHART.grid } },
+        axisLabel: { ...CHART.label, formatter: (v: number) => format(v) },
       },
       series: series.map((s, i) => ({
         type: 'line',
@@ -97,8 +102,10 @@ export function TrendChart({ title, dates, series, format, height = 280 }: Trend
         showSymbol: false,
         symbolSize: 8,
         connectNulls: false,
-        lineStyle: { width: 2, color: SERIES_COLORS[i] },
-        itemStyle: { color: SERIES_COLORS[i] },
+        lineStyle: { width: 2, color: CHART.series[i] },
+        itemStyle: { color: CHART.series[i] },
+        // an 8% fill under the first series only (ChartPanel in the Design System)
+        areaStyle: i === 0 ? { color: CHART.series[0], opacity: 0.08 } : undefined,
         emphasis: { focus: 'series' },
       })),
     }
@@ -112,10 +119,10 @@ export function TrendChart({ title, dates, series, format, height = 280 }: Trend
   }, [dates, series, format])
 
   return (
-    <figure className="min-w-0 rounded-lg border border-slate-200 bg-white p-4">
-      <figcaption className="mb-2 text-sm font-semibold text-slate-900">{title}</figcaption>
+    <figure className="min-w-0 rounded-lg border border-surface-sunken bg-surface-page p-4">
+      <figcaption className="mb-2 text-section-title text-ink">{title}</figcaption>
       <div ref={ref} style={{ height }} role="img" aria-label={title} />
-      <details className="mt-2 text-xs text-slate-600">
+      <details className="mt-2 text-caption text-ink-2">
         <summary className="cursor-pointer select-none">Show as table</summary>
         <div className="mt-2 max-h-64 overflow-auto">
           <table className="w-full text-left">
@@ -131,10 +138,10 @@ export function TrendChart({ title, dates, series, format, height = 280 }: Trend
             </thead>
             <tbody>
               {dates.map((d, i) => (
-                <tr key={d} className="border-t border-slate-100">
+                <tr key={d} className="border-t border-surface-sunken">
                   <td className="py-1 pr-4">{dateLong(d)}</td>
                   {series.map((s) => (
-                    <td key={s.name} className="py-1 pr-4 text-right tabular-nums">
+                    <td key={s.name} className="py-1 pr-4 text-right font-mono tabular-nums">
                       {format(s.values[i])}
                     </td>
                   ))}

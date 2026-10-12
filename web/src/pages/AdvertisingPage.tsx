@@ -187,18 +187,18 @@ export function AdvertisingPage() {
         <Loading what="keywords and targets" />
       ) : (
         <>
-          <div className="flex flex-wrap gap-3 text-sm" aria-label="Keyword flags">
-            <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+          <div className="flex flex-wrap gap-3 text-body" aria-label="Keyword flags">
+            <div className="rounded-lg border border-surface-sunken bg-surface-page px-4 py-3">
               <Flag kind="critical" label="Spend with no sales" />
-              <div className="mt-1 text-slate-700">
+              <div className="mt-1 text-ink-2">
                 <strong className="tabular-nums">{noSales.length}</strong> keywords and targets,{' '}
                 <strong className="tabular-nums">{money(wasted)}</strong> spent with no attributed
                 sale
               </div>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+            <div className="rounded-lg border border-surface-sunken bg-surface-page px-4 py-3">
               <Flag kind="warning" label={`ACoS above ${target}`} />
-              <div className="mt-1 text-slate-700">
+              <div className="mt-1 text-ink-2">
                 <strong className="tabular-nums">{overTarget}</strong> keywords and targets above
                 the target
               </div>
@@ -211,7 +211,7 @@ export function AdvertisingPage() {
             csvName="keywords-and-targets.csv"
             initialSort={{ id: 'cost', desc: true }}
             toolbar={
-              <label className="flex items-center gap-1.5 text-xs text-slate-700">
+              <label className="flex items-center gap-1.5 text-caption text-ink-2">
                 <input
                   type="checkbox"
                   checked={flaggedOnly}
@@ -299,7 +299,7 @@ export function AdvertisingPage() {
 function AcosCell({ acos, target }: { acos: number | null; target: number }) {
   if (acos !== null && acos > target) {
     return (
-      <span className="font-medium text-[#9e2a2a]">
+      <span className="font-medium text-critical">
         <span aria-hidden="true">▲ </span>
         {pct(acos)}
         <span className="sr-only"> (above target)</span>

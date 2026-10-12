@@ -33,25 +33,29 @@ export function KpiTile({ label, value, current, previous, better, hint, points 
       : points
         ? `${(change * 100).toFixed(1)} pts`
         : pct(change)
-  let tone = 'text-slate-600'
+  let tone = 'text-ink-2'
   if (change !== undefined && change !== null && change !== 0 && better !== 'neutral') {
     const good = change > 0 === (better === 'up')
-    tone = good ? 'text-[#0a7f0a]' : 'text-[#b52f2f]'
+    tone = good ? 'text-accent-strong' : 'text-critical'
   }
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-4 py-3" title={hint}>
-      <div className="text-xs font-medium text-slate-600">{label}</div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{value}</div>
+    <div className="rounded-lg bg-surface-page/94 px-4 py-3.5 shadow-tile" title={hint}>
+      <div className="text-small text-ink-3">{label}</div>
+      <div className="mt-1.5 w-fit bg-(image:--gradient-brand) bg-clip-text text-[22px] leading-(--text-kpi-number--line-height) font-semibold tracking-(--text-kpi-number--letter-spacing) text-transparent tabular-nums md:text-kpi-number">
+        {value}
+      </div>
       {change === undefined ? null : (
-        <div className={`mt-1 text-xs tabular-nums ${tone}`}>
+        <div className={`mt-2 text-caption tabular-nums ${tone}`}>
           {change === null ? (
-            <span className="text-slate-500">No comparison</span>
+            <span className="text-ink-3">No comparison</span>
           ) : (
             <>
-              <span aria-hidden="true">{change > 0 ? '▲' : change < 0 ? '▼' : '■'}</span>{' '}
-              {change > 0 ? '+' : ''}
-              {shown} <span className="text-slate-500">vs previous</span>
-              <span className="hidden text-slate-500 sm:inline"> period</span>
+              <b className="font-semibold">
+                <span aria-hidden="true">{change > 0 ? '▲' : change < 0 ? '▼' : '■'}</span>{' '}
+                {change > 0 ? '+' : ''}
+                {shown}
+              </b>{' '}
+              <span className="text-ink-2">on last period</span>
             </>
           )}
         </div>

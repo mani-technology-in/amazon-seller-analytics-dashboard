@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { TOKENS, cssVariables, flatten } from './tokens'
 
@@ -37,5 +38,26 @@ describe('design tokens (NFR-16)', () => {
 
   it('src/index.css declares exactly the token values, nothing more or less', () => {
     expect(themeBlock()).toEqual(cssVariables())
+  })
+
+  it("switches off Tailwind's default colours, so only token colours exist", () => {
+    const css = readFileSync(new URL('../index.css', import.meta.url), 'utf-8')
+    expect(css).toMatch(/@theme static \{\s*\/\*[^*]*\*\/\s*--color-\*: initial;/)
+  })
+
+  it('no component or page hard-codes a colour', () => {
+    const src = new URL('..', import.meta.url).pathname
+    const files = readdirSync(src, { recursive: true, encoding: 'utf-8' }).filter(
+      (f) => /\.(ts|tsx)$/.test(f) && !/\.test\.tsx?$/.test(f) && !f.startsWith('theme'),
+    )
+    expect(files.length).toBeGreaterThan(20)
+    const found = files.flatMap((f) => {
+      const text = readFileSync(join(src, f), 'utf-8')
+      const hits = text.match(
+        /#[0-9a-fA-F]{3,8}\b|\b(slate|gray|zinc|red|green|blue|amber)-\d{2,3}\b/g,
+      )
+      return hits ? [`${f}: ${hits.join(' ')}`] : []
+    })
+    expect(found).toEqual([])
   })
 })
