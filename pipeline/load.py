@@ -28,7 +28,14 @@ ADS_TABLES = {
     "sdAdvertisedProduct": "sd_advertised_product",
 }
 
-RAW_TABLES = ["products", "sales_traffic_by_asin", "fba_inventory_snapshot", *ADS_TABLES.values()]
+RAW_TABLES = [
+    "products",
+    "marketplaces",
+    "fx_rates",
+    "sales_traffic_by_asin",
+    "fba_inventory_snapshot",
+    *ADS_TABLES.values(),
+]
 
 Row = tuple[date | None, str, str]
 
@@ -38,8 +45,21 @@ def products(src: Path) -> Iterator[Row]:
         yield None, "products.json", json.dumps(record)
 
 
+def marketplaces(src: Path) -> Iterator[Row]:
+    for record in json.loads((src / "marketplaces.json").read_text(encoding="utf-8")):
+        yield None, "marketplaces.json", json.dumps(record)
+
+
+def fx_rates(src: Path) -> Iterator[Row]:
+    path = src / "fx" / "rates.csv"
+    with path.open(encoding="utf-8", newline="") as f:
+        for record in csv.DictReader(f):
+            yield date.fromisoformat(record["month"] + "-01"), "fx/rates.csv", json.dumps(record)
+
+
 def sales_traffic(src: Path) -> Iterator[Row]:
-    for path in sorted((src / "sales_traffic").glob("*.json")):
+    """One folder per marketplace: sales_traffic/<code>/<date>.json."""
+    for path in sorted((src / "sales_traffic").glob("*/*.json")):
         report = json.loads(path.read_text(encoding="utf-8"))
         day = date.fromisoformat(report["reportSpecification"]["dataStartTime"][:10])
         rel = path.relative_to(src).as_posix()
@@ -48,7 +68,8 @@ def sales_traffic(src: Path) -> Iterator[Row]:
 
 
 def fba_inventory(src: Path) -> Iterator[Row]:
-    for path in sorted((src / "fba_inventory").glob("*.tsv")):
+    """One folder per fulfilment network: fba_inventory/<network>/<date>.tsv."""
+    for path in sorted((src / "fba_inventory").glob("*/*.tsv")):
         day = date.fromisoformat(path.stem)
         rel = path.relative_to(src).as_posix()
         with path.open(encoding="utf-8", newline="") as f:
@@ -57,11 +78,12 @@ def fba_inventory(src: Path) -> Iterator[Row]:
 
 
 def ads_report(src: Path, report_type: str) -> Iterator[Row]:
-    path = src / "ads" / f"{report_type}.json.gz"
-    rel = path.relative_to(src).as_posix()
-    with gzip.open(path, "rt", encoding="utf-8") as f:
-        for record in json.load(f):
-            yield date.fromisoformat(record["date"]), rel, json.dumps(record)
+    """One folder per Amazon Ads profile (marketplace): ads/<code>/<reportTypeId>.json.gz."""
+    for path in sorted((src / "ads").glob(f"*/{report_type}.json.gz")):
+        rel = path.relative_to(src).as_posix()
+        with gzip.open(path, "rt", encoding="utf-8") as f:
+            for record in json.load(f):
+                yield date.fromisoformat(record["date"]), rel, json.dumps(record)
 
 
 def copy_rows(conn: Connection, table: str, rows: Iterator[Row]) -> int:
@@ -85,6 +107,8 @@ def load(src: Path) -> dict[str, int]:
     apply_schemas()
     sources = {
         "products": products(src),
+        "marketplaces": marketplaces(src),
+        "fx_rates": fx_rates(src),
         "sales_traffic_by_asin": sales_traffic(src),
         "fba_inventory_snapshot": fba_inventory(src),
         **{table: ads_report(src, rt) for rt, table in ADS_TABLES.items()},

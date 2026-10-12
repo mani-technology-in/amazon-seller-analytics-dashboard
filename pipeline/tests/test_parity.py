@@ -9,9 +9,9 @@ from parity import RANGES, compute
 
 
 @pytest.fixture(scope="module")
-def fixture(sim, tmp_path_factory):
+def fixture(world, tmp_path_factory):
     out = tmp_path_factory.mktemp("parity")
-    write_all(sim, out)
+    write_all(world, out)
     load(out)
     build()
     return compute()

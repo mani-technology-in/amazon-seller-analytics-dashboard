@@ -22,9 +22,9 @@ FIRST_LOAD = [
 
 
 @pytest.fixture(scope="module")
-def exported(sim, tmp_path_factory):
+def exported(world, tmp_path_factory):
     src = tmp_path_factory.mktemp("export-src")
-    write_all(sim, src)
+    write_all(world, src)
     load(src)
     build()
     out = tmp_path_factory.mktemp("export-out")
@@ -81,11 +81,13 @@ def test_ids_are_strings(exported):
         ("inventory_daily.json", "fct_inventory_daily", "available"),
     ],
 )
-def test_totals_match_marts(exported, name, mart, column):
+def test_v1_files_hold_the_us_marketplace_and_match_the_marts(exported, name, mart, column):
+    """The v1.0 pages read US data only, so these files stay US-only until CR-1 PR 6."""
     out, _ = exported
     exported_total = math.fsum(_read(out, name)[column])
+    where = "network = 'US'" if mart == "fct_inventory_daily" else "marketplace = 'US'"
     with connect() as conn, conn.cursor() as cur:
-        cur.execute(f"SELECT sum({column}) FROM marts.{mart}")
+        cur.execute(f"SELECT sum({column}) FROM marts.{mart} WHERE {where}")
         (mart_total,) = cur.fetchone()
     assert exported_total == pytest.approx(float(mart_total), abs=0.01)
 
@@ -96,3 +98,21 @@ def test_size_budget(exported):
     first = sum(_gzip_kb(out / name) for name in FIRST_LOAD)
     assert first < 250, f"first load {first:.0f} KB"
     assert _gzip_kb(out / "ads_target_daily.json") < 1024
+
+
+def test_marketplaces_and_exchange_rates(exported):
+    out, _ = exported
+    markets = _read(out, "marketplaces.json")
+    assert [m["marketplace"] for m in markets][0] == "US"
+    assert {m["marketplace"]: m["currency"] for m in markets} == {
+        "US": "USD",
+        "CA": "CAD",
+        "MX": "MXN",
+        "UK": "GBP",
+        "DE": "EUR",
+        "FR": "EUR",
+    }
+    fx = _read(out, "fx_monthly.json")
+    assert len(fx["year_month"]) == 48
+    mxn = [r for c, r in zip(fx["currency"], fx["usd_rate"], strict=True) if c == "MXN"]
+    assert all(0.04 < r < 0.07 for r in mxn), "FX rates keep their 6 decimals"
