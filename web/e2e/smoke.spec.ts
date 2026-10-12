@@ -29,7 +29,9 @@ for (const p of PAGES) {
     await page.goto(p.path)
     await expect(page.getByRole('heading', { level: 1, name: p.heading })).toBeVisible()
     await expect(page.getByText('Synthetic demo data')).toBeVisible()
-    await expect(page.getByText(/Data through \d{1,2} \w{3} \d{4}/)).toBeVisible()
+    await expect(
+      page.getByText(/Data updated \d{1,2} \w{3} \d{4}/).filter({ visible: true }),
+    ).toHaveCount(1)
     for (const text of p.expects) {
       await expect(page.getByText(text, { exact: false }).first()).toBeVisible()
     }

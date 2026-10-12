@@ -1,11 +1,149 @@
 @import 'tailwindcss';
 
+/* Design tokens (design/tokens.json). Generated from src/theme/tokens.ts; tokens.test.ts fails
+   if this block and the JSON ever differ, so change the JSON first and copy the result here.
+   "static" emits every variable, so components and charts can read them all. */
+@theme static {
+  --color-surface-page: #ffffff;
+  --color-surface-sky: #e4eeff;
+  --color-surface-side: #f7faff;
+  --color-surface-sunken: #edf2f9;
+  --color-surface-hover: #eef4fd;
+  --color-line: #dce5f2;
+  --color-line-strong: #7a8aa3;
+  --color-ink-2: #4a5c7c;
+  --color-ink-3: #5a6984;
+  --color-ink: #04182f;
+  --color-ink-disabled: #8a97ad;
+  --color-accent: #0078f0;
+  --color-accent-strong: #0057c8;
+  --color-accent-strong-hover: #00479f;
+  --color-accent-soft: #eaf3ff;
+  --color-violet: #783fee;
+  --color-chart-bar-soft: #a9c6f5;
+  --color-chart-bar-cost: #c9d6ea;
+  --color-switch-off: #7a8aa3;
+  --color-skeleton: #e8eef7;
+  --color-critical: #b42339;
+  --color-critical-soft: #fdecee;
+  --color-warning: #8a5300;
+  --color-warning-soft: #fff3dc;
+  --color-toast-ground: #04182f;
+  --color-toast-icon: #7fb6ff;
+  --gradient-brand: linear-gradient(168deg, #0078f0 0%, #783fee 96%);
+  --font-sans:
+    'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono:
+    'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --text-page-title: 26px;
+  --text-page-title--line-height: 1.15;
+  --text-page-title--font-weight: 700;
+  --text-page-title--letter-spacing: -0.02em;
+  --text-kpi-number: 26px;
+  --text-kpi-number--line-height: 1;
+  --text-kpi-number--font-weight: 600;
+  --text-kpi-number--letter-spacing: -0.02em;
+  --text-section-title: 15px;
+  --text-section-title--line-height: 1.35;
+  --text-section-title--font-weight: 600;
+  --text-section-title--letter-spacing: 0;
+  --text-body: 14px;
+  --text-body--line-height: 1.5;
+  --text-body--font-weight: 400;
+  --text-body--letter-spacing: 0;
+  --text-small: 13px;
+  --text-small--line-height: 1.45;
+  --text-small--font-weight: 400;
+  --text-small--letter-spacing: 0;
+  --text-caption: 12.5px;
+  --text-caption--line-height: 1.4;
+  --text-caption--font-weight: 400;
+  --text-caption--letter-spacing: 0;
+  --text-table-number: 13px;
+  --text-table-number--line-height: 1.45;
+  --text-table-number--font-weight: 400;
+  --text-table-number--letter-spacing: 0;
+  --text-chart-label: 11px;
+  --text-chart-label--line-height: 1.3;
+  --text-chart-label--font-weight: 400;
+  --text-chart-label--letter-spacing: 0.12em;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+  --shadow-tile:
+    inset 0px 1px 0px 0px #fffffff2, 0px 0px 0px 1px #04182f0d, 0px 20px 44px -30px #04182f52;
+  --shadow-raised: 0px 1px 2px 0px #0f172a0f, 0px 0px 0px 1px #04182f0d;
+  --shadow-toast: 0px 20px 44px -24px #04182f99;
+  --duration-press: 120ms;
+  --duration-ui: 160ms;
+  --duration-enter: 180ms;
+  --duration-step: 200ms;
+  --duration-stagger: 110ms;
+  --duration-pulse: 1400ms;
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@layer base {
+  /* The root stays at 16px so Tailwind's rem spacing keeps its 4px step; text size is set on body. */
+  html {
+    font-family: var(--font-sans);
+    color: var(--color-ink);
+    background: var(--color-surface-page);
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent-strong);
+    outline-offset: 2px;
+  }
+}
+
+/* Motion (standards 6). The "Reduce motion" switch sets data-reduce-motion on <html>; the
+   system setting does the same through the media query. Either way nothing animates. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+[data-reduce-motion] *,
+[data-reduce-motion] ::before,
+[data-reduce-motion] ::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* Page changes: a 160 ms cross-fade of the content area only (View Transitions API). */
+.page-content {
+  view-transition-name: page-content;
+}
+::view-transition-old(page-content),
+::view-transition-new(page-content) {
+  animation-duration: var(--duration-ui);
+  animation-timing-function: var(--ease-out);
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+/* The pale-blue band behind the page title and filters. */
+.page-band {
+  background: linear-gradient(180deg, var(--color-surface-sky) 0, var(--color-surface-page) 360px);
+}
+
 /* Chart tooltip (components/chartTooltip.ts). Styled here, not inline, so the
    Content-Security-Policy can keep style-src 'self'. Swatch colours are set per series in chartTooltip.ts. */
 .chart-tip {
   font-size: 12px;
   line-height: 1.5;
-  color: #1f1e1d;
+  color: var(--color-ink);
 }
 .chart-tip-date {
   margin: 0 0 4px;
