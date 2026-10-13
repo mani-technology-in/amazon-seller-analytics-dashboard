@@ -29,6 +29,9 @@ function siteHeaders(): Record<string, string> {
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   preview: { headers: siteHeaders() },
+  // Fonts stay files: Vite would inline the smallest font subsets as data: URLs, which the
+  // Content-Security-Policy (font-src 'self') blocks.
+  build: { assetsInlineLimit: (file) => (file.endsWith('.woff2') ? false : undefined) },
   test: {
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     exclude: ['e2e/**', 'node_modules/**'],

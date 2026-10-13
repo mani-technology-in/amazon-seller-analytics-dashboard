@@ -8,6 +8,7 @@ Version 1.1 (change request CR-1): a redesign to match the Amazon section of man
 
 ### Added
 
+- New look, part 1: design tokens (`design/tokens.json`) shared by the stylesheet and the charts, Plus Jakarta Sans and JetBrains Mono bundled from npm (SIL OFL, served from the demo's own domain), a side navigation in the website's page order, a header with the "Synthetic demo data" label and a **Reduce motion** switch, and a short cross-fade between pages.
 - Synthetic data for six marketplaces (US, Canada, Mexico, UK, Germany, France) on five fulfilment networks, each in its own currency with Amazon's marketplace IDs. Mexico and France open during the year and ramp up; the UK and Germany run Sponsored Products ads; Germany and France share EU stock. Monthly exchange rates are included for converting to USD; the conversion arrives with the new screens.
 - New marts `dim_marketplace` and `dim_fx_monthly`; every fact table has a `marketplace` (inventory: `network`) column.
 - The US report files are byte-identical to 1.0.0, and the dashboard's export stays US-only until the new screens, so the live site does not change yet.

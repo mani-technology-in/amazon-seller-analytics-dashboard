@@ -1,81 +1,107 @@
 import { Suspense } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useDatasets } from '../app/useDatasets'
+import { useReduceMotion } from '../app/motion'
 import { dateLong } from '../lib/format'
+import { ReduceMotionSwitch } from './ReduceMotionSwitch'
 
+// The website's page order; Products stands where Sales will go, and Sales, Profit and
+// Reports join this list with their pages (CR-1 PR 6 and PR 8).
 const NAV = [
   { to: '/', label: 'Overview', end: true },
-  { to: '/advertising', label: 'Advertising' },
   { to: '/products', label: 'Products' },
   { to: '/inventory', label: 'Inventory' },
+  { to: '/advertising', label: 'Advertising' },
 ]
 
-/** Page frame: brand, navigation, the synthetic-data label and the data's last date (FR-4). */
+const BUILT_BY = (
+  <a className="text-accent-strong hover:underline" href="https://manitechnology.com">
+    Built by Mani Technology
+  </a>
+)
+
+/** Page frame: side navigation with the store and data date, and the content area (FR-4, FR-16, FR-19). */
 export function Layout() {
   const manifest = useDatasets('manifest')
   const { search } = useLocation()
+  const reduced = useReduceMotion()
+  const brand = manifest.status === 'ready' ? manifest.data.manifest.brand : 'Demo Brand'
+  const initials = brand
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
 
   return (
-    <div className="min-h-screen bg-[#f6f6f4] text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 pt-4">
-          <div>
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Seller analytics
-            </div>
-            <div className="text-lg font-semibold">
-              {manifest.status === 'ready' ? manifest.data.manifest.brand : 'Demo Brand'}
-              <span className="font-normal text-slate-500"> · Amazon US</span>
-            </div>
+    <div className="flex min-h-screen flex-wrap md:flex-nowrap">
+      <aside className="flex shrink-0 grow basis-full flex-col gap-3 border-b border-surface-sunken bg-surface-side px-4 py-3.5 md:w-[224px] md:basis-auto md:grow-0 md:gap-[22px] md:border-r md:border-b-0 md:px-3.5 md:py-[22px]">
+        <div className="flex items-center gap-2.5 px-1.5">
+          <div
+            aria-hidden="true"
+            className="flex size-8 items-center justify-center rounded-[9px] bg-(image:--gradient-brand) text-body font-bold text-surface-page"
+          >
+            {initials}
           </div>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
-            <span className="rounded-full bg-[#fff4dc] px-3 py-1 font-medium text-[#7a5200] ring-1 ring-inset ring-[#fab219]/40">
-              <span aria-hidden="true">▲ </span>Synthetic demo data
-            </span>
-            {manifest.status === 'ready' ? (
-              <span>
-                Data through{' '}
-                <strong className="font-semibold text-slate-900">
-                  {dateLong(manifest.data.manifest.dataEnd)}
-                </strong>
-              </span>
-            ) : null}
+          <div>
+            <div className="font-semibold">{brand}</div>
+            <div className="text-caption text-ink-3">Seller workspace · Amazon US</div>
           </div>
         </div>
-        <nav aria-label="Pages" className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 pt-3">
-          {NAV.map((n) => (
-            <NavLink
-              key={n.to}
-              to={{ pathname: n.to, search }}
-              end={n.end}
-              className={({ isActive }) =>
-                `whitespace-nowrap border-b-2 px-3 pb-2 text-sm font-medium ${isActive ? 'border-[#2a78d6] text-slate-900' : 'border-transparent text-slate-600 hover:text-slate-900'}`
-              }
-            >
-              {n.label}
-            </NavLink>
-          ))}
+        <nav aria-label="Pages">
+          <ul className="flex flex-wrap gap-1 md:flex-col md:gap-0.5">
+            {NAV.map((n) => (
+              <li key={n.to}>
+                <NavLink
+                  to={{ pathname: n.to, search }}
+                  end={n.end}
+                  viewTransition={!reduced}
+                  className={({ isActive }) =>
+                    `flex min-h-9 items-center rounded-sm px-2.5 md:min-h-10 md:px-3 ${
+                      isActive
+                        ? 'bg-surface-page font-semibold text-accent-strong shadow-raised'
+                        : 'text-ink-2 hover:bg-surface-hover hover:text-ink'
+                    }`
+                  }
+                >
+                  {n.label}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
         </nav>
-      </header>
-      <main className="mx-auto max-w-7xl space-y-4 px-4 py-6">
-        {manifest.status === 'error' ? (
-          <ErrorBox error={manifest.error} />
-        ) : manifest.status === 'loading' ? (
-          <Loading />
-        ) : (
-          <Suspense fallback={<Loading what="page" />}>
-            <Outlet context={manifest.data.manifest} />
-          </Suspense>
-        )}
-      </main>
-      <footer className="mx-auto max-w-7xl px-4 pb-8 text-xs text-slate-600">
-        A demo by{' '}
-        <a className="underline hover:text-slate-900" href="https://manitechnology.com">
-          Mani Technology
-        </a>
-        . All products, campaigns and numbers are invented, shaped like real Amazon SP-API and
-        Amazon Ads reports.
-      </footer>
+        <div className="mt-auto hidden flex-col gap-1.5 px-1.5 text-caption text-ink-3 md:flex">
+          {manifest.status === 'ready' ? (
+            <span>Data updated {dateLong(manifest.data.manifest.dataEnd)}</span>
+          ) : null}
+          {BUILT_BY}
+        </div>
+      </aside>
+      <div className="page-band min-w-0 grow-[999] basis-[560px] px-4 pt-[18px] pb-10 md:px-8 md:pt-[22px] md:pb-14">
+        <main className="page-content space-y-4">
+          {manifest.status === 'error' ? (
+            <ErrorBox error={manifest.error} />
+          ) : manifest.status === 'loading' ? (
+            <Loading />
+          ) : (
+            <Suspense fallback={<Loading what="page" />}>
+              <Outlet context={manifest.data.manifest} />
+            </Suspense>
+          )}
+        </main>
+        <footer className="mt-10 flex flex-col gap-1.5 text-caption text-ink-3">
+          <span className="md:hidden">
+            {manifest.status === 'ready'
+              ? `Data updated ${dateLong(manifest.data.manifest.dataEnd)} · `
+              : null}
+            {BUILT_BY}
+          </span>
+          <span>
+            All products, campaigns and numbers are invented, shaped like real Amazon SP-API and
+            Amazon Ads reports.
+          </span>
+        </footer>
+      </div>
     </div>
   )
 }
@@ -84,29 +110,56 @@ export function Loading({ what = 'data' }: { what?: string }) {
   return (
     <div
       role="status"
-      className="rounded-lg border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500"
+      className="rounded-lg border border-surface-sunken bg-surface-page px-4 py-8 text-center text-small text-ink-3"
     >
       Loading {what}…
     </div>
   )
 }
 
+/**
+ * Shown when a page's code cannot load, for example a tab left open across a new release whose
+ * old files are gone. Reloading fetches the current release.
+ */
+export function PageLoadError() {
+  return (
+    <div role="alert" className="mx-auto max-w-md space-y-3 px-4 py-16 text-center">
+      <h1 className="text-page-title-phone">The page did not load</h1>
+      <p className="text-small text-ink-2">Check your connection, then try again.</p>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="inline-flex h-10 items-center rounded-md bg-accent-strong px-4 font-semibold text-surface-page hover:bg-accent-strong-hover"
+      >
+        Try again
+      </button>
+    </div>
+  )
+}
+
 export function ErrorBox({ error }: { error: Error }) {
   return (
-    <div
-      role="alert"
-      className="rounded-lg border border-[#d03b3b]/40 bg-[#fbe9e9] px-4 py-3 text-sm text-[#9e2a2a]"
-    >
+    <div role="alert" className="rounded-lg bg-critical-soft px-4 py-3 text-small text-critical">
       Could not load the dashboard data. {error.message}
     </div>
   )
 }
 
+/** The page's top row: its title, the synthetic-data label and the Reduce motion switch. */
 export function PageTitle({ title, children }: { title: string; children?: React.ReactNode }) {
   return (
-    <div>
-      <h1 className="text-xl font-semibold">{title}</h1>
-      {children ? <p className="mt-1 text-sm text-slate-600">{children}</p> : null}
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <h1 className="text-page-title-phone md:text-page-title">{title}</h1>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span className="inline-flex h-7 items-center gap-1.5 rounded-pill bg-surface-page px-2.5 text-caption text-ink-2 ring-1 ring-line">
+            <span aria-hidden="true" className="size-1.5 rounded-pill bg-accent" />
+            Synthetic demo data
+          </span>
+          <ReduceMotionSwitch />
+        </div>
+      </div>
+      {children ? <p className="text-small text-ink-3">{children}</p> : null}
     </div>
   )
 }
