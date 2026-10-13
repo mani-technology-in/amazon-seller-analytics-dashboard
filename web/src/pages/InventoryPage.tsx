@@ -56,16 +56,16 @@ export function InventoryPage() {
         <Loading />
       ) : (
         <>
-          <div className="flex flex-wrap gap-3 text-sm" aria-label="Stock flags">
-            <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+          <div className="flex flex-wrap gap-3 text-body" aria-label="Stock flags">
+            <div className="rounded-lg border border-surface-sunken bg-surface-page px-4 py-3">
               <Flag kind="critical" label="Out of stock" />
-              <div className="mt-1 tabular-nums text-slate-700">
+              <div className="mt-1 tabular-nums text-ink-2">
                 <strong>{out}</strong> products
               </div>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+            <div className="rounded-lg border border-surface-sunken bg-surface-page px-4 py-3">
               <Flag kind="warning" label={`Under ${filters.lowStockDays} days of cover`} />
-              <div className="mt-1 tabular-nums text-slate-700">
+              <div className="mt-1 tabular-nums text-ink-2">
                 <strong>{low}</strong> products
               </div>
             </div>
@@ -83,7 +83,7 @@ export function InventoryPage() {
                   header: 'Product',
                   value: (r) => r.title,
                   cell: (r) => (
-                    <Link className="text-[#1c5cab] hover:underline" to={`/products/${r.asin}`}>
+                    <Link className="text-accent-strong hover:underline" to={`/products/${r.asin}`}>
                       {r.title.replace('Demo Brand ', '')}
                     </Link>
                   ),
@@ -118,7 +118,7 @@ export function InventoryPage() {
                   value: (r) => (r.outOfStock ? 0 : r.daysOfCover),
                   cell: (r) =>
                     r.daysOfCover === null ? (
-                      <span className="text-slate-500">no recent sales</span>
+                      <span className="text-ink-3">no recent sales</span>
                     ) : (
                       decimal1(r.daysOfCover)
                     ),
@@ -127,14 +127,14 @@ export function InventoryPage() {
                 {
                   id: 'status',
                   header: 'Status',
-                  value: (r) => ['Out of stock', 'Low stock', 'OK'][status(r)],
+                  value: (r) => ['Out of stock', 'Low stock', 'In stock'][status(r)],
                   cell: (r) =>
                     r.outOfStock ? (
                       <Flag kind="critical" label="Out of stock" />
                     ) : r.lowStock ? (
                       <Flag kind="warning" label="Low stock" />
                     ) : (
-                      <Flag kind="good" label="OK" />
+                      <Flag kind="good" label="In stock" />
                     ),
                 },
               ] satisfies Column<InventoryRow>[]

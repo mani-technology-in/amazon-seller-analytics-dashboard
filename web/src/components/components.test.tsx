@@ -55,7 +55,7 @@ describe('DataTable (FR-3)', () => {
         initialSort={{ id: 'name', desc: false }}
       />,
     )
-    await userEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Download CSV' }))
     expect(download).toHaveBeenCalledWith('t.csv', 'Name,ACoS\r\nA,\r\nB,0.2\r\nC,0.5\r\n')
   })
 

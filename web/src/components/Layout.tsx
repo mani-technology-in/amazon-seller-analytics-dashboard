@@ -106,13 +106,20 @@ export function Layout() {
   )
 }
 
+/**
+ * Loading (Skeleton in the Design System): grey blocks in the shape of a KPI row and a panel,
+ * so nothing jumps when the data arrives. The pulse stops under Reduce motion.
+ */
 export function Loading({ what = 'data' }: { what?: string }) {
+  const block = 'animate-pulse rounded-lg bg-skeleton [animation-duration:var(--duration-pulse)]'
   return (
-    <div
-      role="status"
-      className="rounded-lg border border-surface-sunken bg-surface-page px-4 py-8 text-center text-small text-ink-3"
-    >
-      Loading {what}…
+    <div role="status" aria-busy="true" aria-label={`Loading ${what}`} className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className={`h-[104px] ${block}`} />
+        ))}
+      </div>
+      <div className={`h-72 ${block}`} />
     </div>
   )
 }

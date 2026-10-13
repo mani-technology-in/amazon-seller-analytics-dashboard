@@ -1,17 +1,21 @@
-/** Status flags always pair an icon and a label with the colour, so colour never works alone. */
+/**
+ * A short state label (Flag in the Design System). Problems get a pill with an icon and words,
+ * so attention never depends on colour alone; a normal state is plain quiet text.
+ */
 
-const STYLES = {
-  critical: { icon: '●', className: 'bg-[#fbe9e9] text-[#9e2a2a] ring-[#d03b3b]/30' },
-  warning: { icon: '▲', className: 'bg-[#fff4dc] text-[#7a5200] ring-[#fab219]/40' },
-  good: { icon: '✓', className: 'bg-[#e6f5e6] text-[#0a6b0a] ring-[#0ca30c]/30' },
-  neutral: { icon: '–', className: 'bg-slate-100 text-slate-600 ring-slate-300' },
+const PILL = {
+  critical: { icon: '●', className: 'bg-critical-soft text-critical' },
+  warning: { icon: '▲', className: 'bg-warning-soft text-warning' },
 } as const
 
-export function Flag({ kind, label }: { kind: keyof typeof STYLES; label: string }) {
-  const s = STYLES[kind]
+export function Flag({ kind, label }: { kind: keyof typeof PILL | 'good'; label: string }) {
+  if (kind === 'good') {
+    return <span className="text-caption text-ink-3">{label}</span>
+  }
+  const s = PILL[kind]
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${s.className}`}
+      className={`inline-flex h-6 items-center gap-1 rounded-pill px-2.5 text-caption font-semibold ${s.className}`}
     >
       <span aria-hidden="true">{s.icon}</span>
       {label}

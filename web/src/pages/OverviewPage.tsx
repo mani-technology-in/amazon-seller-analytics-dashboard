@@ -175,7 +175,10 @@ export function OverviewPage() {
                     header: 'Product',
                     value: (r) => r.title,
                     cell: (r) => (
-                      <Link className="text-[#1c5cab] hover:underline" to={`/products/${r.asin}`}>
+                      <Link
+                        className="text-accent-strong hover:underline"
+                        to={`/products/${r.asin}`}
+                      >
                         {r.title.replace('Demo Brand ', '')}
                       </Link>
                     ),

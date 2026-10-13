@@ -60,7 +60,7 @@ export function ProductsPage() {
                 header: 'Product',
                 value: (r) => r.title,
                 cell: (r) => (
-                  <Link className="text-[#1c5cab] hover:underline" to={`/products/${r.asin}`}>
+                  <Link className="text-accent-strong hover:underline" to={`/products/${r.asin}`}>
                     {r.title.replace('Demo Brand ', '')}
                   </Link>
                 ),
@@ -69,7 +69,7 @@ export function ProductsPage() {
                 id: 'asin',
                 header: 'ASIN',
                 value: (r) => r.asin,
-                cell: (r) => <span className="font-mono text-xs">{r.asin}</span>,
+                cell: (r) => <span className="font-mono text-caption">{r.asin}</span>,
               },
               { id: 'category', header: 'Category', value: (r) => r.category },
               {
@@ -164,7 +164,7 @@ export function ProductDetailPage() {
     return (
       <PageTitle title="Product not found">
         No product with ASIN {asin}.{' '}
-        <Link className="text-[#1c5cab] underline" to="/products">
+        <Link className="text-accent-strong underline" to="/products">
           Back to products
         </Link>
       </PageTitle>
@@ -174,7 +174,7 @@ export function ProductDetailPage() {
   return (
     <>
       <Link
-        className="text-sm text-[#1c5cab] hover:underline"
+        className="text-body text-accent-strong hover:underline"
         to={{ pathname: '/products', search: location.search }}
       >
         ← All products

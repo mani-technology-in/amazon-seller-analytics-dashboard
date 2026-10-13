@@ -22,7 +22,7 @@ interface FilterBarProps {
 }
 
 const control =
-  'rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-2 focus:outline-[#2a78d6]'
+  'h-10 rounded-md border border-line-strong bg-surface-page px-3 text-body text-ink focus-visible:outline-2 focus-visible:outline-accent-strong'
 
 /** One row of filters above the content; every value is kept in the URL. */
 export function FilterBar({
@@ -53,10 +53,10 @@ export function FilterBar({
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-x-5 gap-y-3 rounded-lg border border-slate-200 bg-white px-4 py-3">
+    <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
       {showDates ? (
         <>
-          <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+          <label className="flex flex-col gap-1 text-caption font-medium text-ink-2">
             Date range
             <select
               className={control}
@@ -80,7 +80,7 @@ export function FilterBar({
           </label>
           {filters.preset === 'custom' ? (
             <div className="flex items-end gap-2">
-              <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+              <label className="flex flex-col gap-1 text-caption font-medium text-ink-2">
                 From
                 <input
                   type="date"
@@ -91,7 +91,7 @@ export function FilterBar({
                   onChange={(e) => e.target.value && update({ from: e.target.value })}
                 />
               </label>
-              <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+              <label className="flex flex-col gap-1 text-caption font-medium text-ink-2">
                 To
                 <input
                   type="date"
@@ -104,12 +104,12 @@ export function FilterBar({
               </label>
             </div>
           ) : null}
-          <div className="text-xs text-slate-600">
-            <div className="font-medium text-slate-900">
+          <div className="text-caption text-ink-2">
+            <div className="font-medium text-ink">
               {dateLong(range.start)} – {dateLong(range.end)}
             </div>
             {filters.rangeAdjusted ? (
-              <p role="note" className="mt-1 text-amber-800">
+              <p role="note" className="mt-1 text-warning">
                 {filters.rangeAdjusted === 'outside'
                   ? 'The chosen dates have no data, so the default range is shown.'
                   : 'Dates adjusted to the data available.'}{' '}
@@ -117,7 +117,7 @@ export function FilterBar({
               </p>
             ) : null}
             {showCompare ? (
-              <label className="mt-1 flex items-center gap-1.5">
+              <label className="flex min-h-9 items-center gap-1.5">
                 <input
                   type="checkbox"
                   checked={filters.compare}
@@ -136,7 +136,7 @@ export function FilterBar({
 
       {campaigns ? (
         <>
-          <fieldset className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+          <fieldset className="flex flex-col gap-1 text-caption font-medium text-ink-2">
             <legend className="mb-1">Ad type</legend>
             <div className="flex flex-wrap gap-1.5">
               {AD_LABELS.map((a) => {
@@ -148,7 +148,7 @@ export function FilterBar({
                     aria-pressed={on}
                     onClick={() => toggleAd(a.id)}
                     title={a.label}
-                    className={`rounded-full border px-2.5 py-1 text-xs ${on ? 'border-[#2a78d6] bg-[#2a78d6] text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+                    className={`h-10 rounded-sm border px-3 text-small transition-transform duration-(--duration-press) ease-out active:scale-[0.97] ${on ? 'border-accent-strong bg-accent-soft font-semibold text-accent-strong' : 'border-line bg-surface-page text-ink-2 hover:bg-surface-hover'}`}
                   >
                     {a.label}
                   </button>
@@ -156,7 +156,7 @@ export function FilterBar({
               })}
             </div>
           </fieldset>
-          <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+          <label className="flex flex-col gap-1 text-caption font-medium text-ink-2">
             Campaign
             <select
               className={`${control} max-w-72`}
@@ -175,7 +175,7 @@ export function FilterBar({
       ) : null}
 
       {showTargetAcos ? (
-        <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <label className="flex flex-col gap-1 text-caption font-medium text-ink-2">
           Target ACoS
           <span className="flex items-center gap-1">
             <input
@@ -193,7 +193,7 @@ export function FilterBar({
       ) : null}
 
       {showLowStock ? (
-        <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+        <label className="flex flex-col gap-1 text-caption font-medium text-ink-2">
           Low stock below
           <span className="flex items-center gap-1">
             <input

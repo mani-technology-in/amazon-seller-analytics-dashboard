@@ -4,6 +4,8 @@
    if this block and the JSON ever differ, so change the JSON first and copy the result here.
    "static" emits every variable, so components and charts can read them all. */
 @theme static {
+  /* Only token colours exist: Tailwind's default palette is switched off. */
+  --color-*: initial;
   --color-surface-page: #ffffff;
   --color-surface-sky: #e4eeff;
   --color-surface-side: #f7faff;
@@ -148,7 +150,7 @@
 /* Chart tooltip (components/chartTooltip.ts). Styled here, not inline, so the
    Content-Security-Policy can keep style-src 'self'. Swatch colours are set per series in chartTooltip.ts. */
 .chart-tip {
-  font-size: 12px;
+  font-size: var(--text-caption);
   line-height: 1.5;
   color: var(--color-ink);
 }
@@ -171,5 +173,5 @@
 .chart-tip-swatch {
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
