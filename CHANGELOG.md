@@ -24,6 +24,7 @@ Version 1.1 (change request CR-1): a redesign to match the Amazon section of man
 
 ### Fixed
 
+- Production deploys failed their last check since the Content-Security-Policy arrived: Cloudflare Web Analytics adds its beacon script to demo.manitechnology.com, and the policy blocked it. The policy now allows that one script and its reporting address.
 - Chart tooltips no longer use inline styles, which the new Content-Security-Policy would block.
 
 ## [1.0.0] - 2026-10-03
