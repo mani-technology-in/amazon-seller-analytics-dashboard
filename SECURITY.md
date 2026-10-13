@@ -14,7 +14,7 @@ Include what you found, the page or file involved and the steps to reproduce it.
 - Dependencies: osv-scanner checks the web and Python lockfiles; Dependabot proposes updates weekly.
 - Code: Semgrep (high-severity rules) and GitHub CodeQL.
 - Workflows: zizmor checks the GitHub Actions setup; third-party actions are pinned to commit SHAs.
-- Live site: security headers (Content-Security-Policy, HSTS, X-Content-Type-Options, Referrer-Policy, frame-ancestors) are checked on every preview and on the production domain.
+- Live site: security headers (Content-Security-Policy, HSTS, X-Content-Type-Options, Referrer-Policy, frame-ancestors) are checked on every preview and on the production domain. The only outside script allowed is Cloudflare Web Analytics' cookieless beacon, which Cloudflare adds to the production domain.
 
 ## Supported versions
 

@@ -109,6 +109,10 @@ test('the security headers are sent and chart tooltips break no CSP rule', async
   const errors = watchErrors(page)
   const response = await page.goto('/')
   const headers = response!.headers()
+  // only our own scripts, plus Cloudflare's analytics beacon that the live domain adds
+  expect(headers['content-security-policy']).toContain(
+    "script-src 'self' https://static.cloudflareinsights.com;",
+  )
   expect(headers['content-security-policy']).toContain("style-src 'self'")
   expect(headers['content-security-policy']).toContain("frame-ancestors 'none'")
   expect(headers['x-content-type-options']).toBe('nosniff')
