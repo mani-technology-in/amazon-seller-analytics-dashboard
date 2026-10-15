@@ -141,8 +141,9 @@ JOIN staging.stg_products p USING (sku);
 
 -- Amazon's money per product, marketplace and day, in the marketplace's currency. Shipments and
 -- referral fees count on the day they post; refunds (and the referral fee they return) on the
--- day the refund posts. Product cost = units shipped x the unit cost in force, converted from
--- USD at the month's rate. Ad spend stays in the ads facts and is added by the metrics.
+-- day the refund posts; Amazon's refund administration fee counts as referral fee. Product cost = units shipped x the unit cost in force, converted from
+-- USD at the month's rate (NULL, never a lost row, if a cost or rate is missing; a test checks
+-- there are none). Ad spend stays in the ads facts and is added by the metrics.
 CREATE TABLE marts.fct_profit_daily AS
 WITH days AS (
     SELECT date, marketplace, sku FROM staging.stg_finance_shipments
@@ -157,16 +158,16 @@ SELECT
     coalesce(s.principal, 0)::numeric(12, 2) AS principal,
     coalesce(r.units, 0) AS refund_units,
     coalesce(r.refund, 0)::numeric(12, 2) AS refunds,
-    (coalesce(s.referral_fee, 0) - coalesce(r.referral_fee_returned, 0))::numeric(12, 2)
-        AS referral_fees,
+    (coalesce(s.referral_fee, 0) - coalesce(r.referral_fee_returned, 0)
+        + coalesce(r.refund_admin_fee, 0))::numeric(12, 2) AS referral_fees,
     coalesce(s.fba_fee, 0)::numeric(12, 2) AS fba_fees,
     round(coalesce(s.units, 0) * c.unit_cost / fx.usd_rate, 2)::numeric(12, 2) AS product_cost,
     m.currency
 FROM days d
 JOIN staging.stg_products p ON p.sku = d.sku
 JOIN marts.dim_marketplace m ON m.marketplace = d.marketplace
-JOIN marts.dim_product_cost c ON c.sku = d.sku AND d.date BETWEEN c.valid_from AND c.valid_to
-JOIN marts.dim_fx_monthly fx ON fx.year_month = to_char(d.date, 'YYYY-MM') AND fx.currency = m.currency
+LEFT JOIN marts.dim_product_cost c ON c.sku = d.sku AND d.date BETWEEN c.valid_from AND c.valid_to
+LEFT JOIN marts.dim_fx_monthly fx ON fx.year_month = to_char(d.date, 'YYYY-MM') AND fx.currency = m.currency
 LEFT JOIN staging.stg_finance_shipments s
     ON s.date = d.date AND s.marketplace = d.marketplace AND s.sku = d.sku
 LEFT JOIN staging.stg_finance_refunds r

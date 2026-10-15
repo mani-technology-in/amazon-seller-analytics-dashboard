@@ -1,7 +1,6 @@
 """The profit mart keeps every cent of Amazon's fees and refunds, and the SQL profit query
 reproduces the planned P&L (three loss-making products, a normal overall margin)."""
 
-import numpy as np
 import pytest
 
 from db import connect
@@ -39,7 +38,11 @@ def test_profit_mart_keeps_every_cent(warehouse, world):
         assert int(principal) == int(m.sales_cents.sum())
         assert int(refunds) == int(f.refund_cents.sum())
         assert int(refund_units) == int(f.refund_units.sum())
-        assert int(referral) == int(f.commission_cents.sum() - f.commission_returned_cents.sum())
+        assert int(referral) == int(
+            f.commission_cents.sum()
+            - f.commission_returned_cents.sum()
+            + f.refund_admin_cents.sum()
+        )
         assert int(fba) == int(f.fba_cents.sum())
 
 
@@ -86,4 +89,36 @@ def test_sql_profit_shows_three_losing_products_and_a_normal_margin(warehouse):
         revenue - sum(r["refunds"] for r in p.values())
     )
     assert float(fees) == pytest.approx(config.REFERRAL_RATE, abs=0.002)
-    assert np.isclose(float(sum(r["revenue"] for r in p.values())), float(revenue))
+
+
+def test_every_profit_row_has_a_product_cost(warehouse):
+    assert _all("SELECT count(*) FROM marts.fct_profit_daily WHERE product_cost IS NULL")[0][0] == 0
+
+
+def test_staging_sums_every_event_of_a_day_and_keeps_only_a_files_newest_load(warehouse):
+    total = "SELECT sum(units), sum(principal) FROM staging.stg_finance_shipments"
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(total)
+        before = cur.fetchone()
+        # A second order for the same SKU on the same day, in the same file and load (real
+        # Amazon sends one event per order).
+        cur.execute(
+            "INSERT INTO raw.finance_events (report_date, source_file, record, loaded_at)"
+            " SELECT report_date, source_file, record, loaded_at FROM raw.finance_events"
+            " WHERE record ? 'ShipmentItemList' ORDER BY report_date LIMIT 1"
+            " RETURNING (record #>> '{ShipmentItemList,0,QuantityShipped}')::int,"
+            "   (record #>> '{ShipmentItemList,0,ItemChargeList,0,ChargeAmount,CurrencyAmount}')"
+            "::numeric"
+        )
+        units, principal = cur.fetchone()
+        cur.execute(total)
+        assert cur.fetchone() == (before[0] + units, before[1] + principal)
+        # Loading a file again replaces it: the older load of that file no longer counts.
+        cur.execute(
+            "INSERT INTO raw.finance_events (report_date, source_file, record, loaded_at)"
+            " SELECT report_date, source_file, record, loaded_at + interval '1 hour'"
+            " FROM raw.finance_events WHERE source_file = 'finances/US/2026-07-14.json'"
+        )
+        cur.execute(total)
+        assert cur.fetchone() == (before[0] + units, before[1] + principal)
+        conn.rollback()

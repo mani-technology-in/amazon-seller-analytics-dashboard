@@ -110,9 +110,11 @@ WASTED_MAX_YEARLY_SPEND = 550.0  # USD, before seasonality and Q4 CPC increases
 AD_INTENSITY_BY_MONTH = {1: 0.70, 2: 0.85, 7: 1.20, 11: 1.30, 12: 1.35}
 CPC_BY_MONTH = {7: 1.05, 11: 1.10, 12: 1.12}
 
-# Fees, refunds and product cost (CR-1 PR 4). Fee and charge names are Amazon's Finances API
-# values: ChargeType "Principal"; FeeType "Commission" (referral fee) and
-# "FBAPerUnitFulfillmentFee".
+# Fees, refunds and product cost (CR-1 PR 4). Fee names are Amazon's Finances API fee types
+# (https://docs.developer.amazonservices.com/en_CA/finances/Finances_FeeTypes.html, all
+# marketplaces): "Commission" (referral fees), "FBAPerUnitFulfillmentFee" (FBA fulfilment fees)
+# and "RefundCommission" (refund administration fee). The item price is ChargeType "Principal"
+# (as in Amazon's responses, e.g. amzn/selling-partner-api-docs issue #3226).
 MARKETPLACE_NAMES = {
     "US": "Amazon.com",
     "CA": "Amazon.ca",
@@ -126,10 +128,12 @@ FBA_FEE_TIERS_USD = (3.22, 3.86, 4.75, 5.68, 6.92)  # per unit, by product size
 FBA_FEE_INDEX = {"US": 1.0, "CA": 1.12, "MX": 0.85, "UK": 0.92, "EU": 1.0}  # vs US fees
 REFUND_RATE = {"Home Storage": 0.055, "Kitchen": 0.03, "Bath": 0.035, "Cleaning": 0.022}
 REFUND_LAG_DAYS = (3, 30)  # refunds post this many days after the sale
+REFUND_ADMIN_RATE = 0.20  # share of the returned referral fee that Amazon keeps
+REFUND_ADMIN_CAP_USD = 5.0  # per unit
 UNIT_COST_RATIO = (0.30, 0.40)  # landed unit cost as a share of the US list price
 LOSS_PRODUCT_COUNT = 3  # products that lose money after ad spend over the year
 LOSS_MARGIN = -0.05  # their net margin, roughly
-MIN_PROFIT_MARGIN = 0.03  # every other product keeps at least this net margin
+MIN_PROFIT_MARGIN = 0.05  # every other product keeps at least this net margin
 COST_CHANGE_COUNT = 4  # products whose unit cost rises once during the year
 COST_CHANGE_DATE = date(2026, 4, 1)
 COST_CHANGE_RATE = 0.08

@@ -19,7 +19,9 @@ MARKETS = {m.code: m for m in config.MARKETPLACES}
 def fx(output) -> dict[tuple[str, str], float]:
     with (output / "fx" / "rates.csv").open(encoding="utf-8") as f:
         rates = {(r["month"], r["currency"]): float(r["usd_rate"]) for r in csv.DictReader(f)}
-    return defaultdict(lambda: 1.0, rates)
+    for month in {m for m, _ in rates}:
+        rates[(month, "USD")] = 1.0  # only USD defaults to 1; a missing rate fails loudly
+    return rates
 
 
 @pytest.fixture(scope="module")
@@ -70,9 +72,9 @@ def pnl(output, events, fx, world) -> dict[str, dict[str, float]]:
                 _money(item["ItemChargeAdjustmentList"], "ChargeType", "Principal", "ChargeAmount")
                 * rate
             )
-            s["referral"] -= (
-                _money(item["ItemFeeAdjustmentList"], "FeeType", "Commission", "FeeAmount") * rate
-            )
+            fees = item["ItemFeeAdjustmentList"]
+            s["referral"] -= _money(fees, "FeeType", "Commission", "FeeAmount") * rate
+            s["referral"] -= _money(fees, "FeeType", "RefundCommission", "FeeAmount") * rate
     for _code, m in world.markets.items():
         for a in m.ads:
             if a.campaign.ad_product == "SPONSORED_BRANDS":
@@ -136,31 +138,55 @@ def test_each_marketplace_uses_its_own_name_and_currency(events):
 
 
 def test_fees_are_negative_and_refunds_return_the_referral_fee(events):
-    for _code, _day, e in events["shipment"][:500]:
+    for _code, _day, e in events["shipment"]:
         for item in e["ShipmentItemList"]:
             assert item["ItemChargeList"][0]["ChargeAmount"]["CurrencyAmount"] > 0
             assert all(f["FeeAmount"]["CurrencyAmount"] < 0 for f in item["ItemFeeList"])
-    for _code, _day, e in events["refund"][:500]:
+    for _code, _day, e in events["refund"]:
         for item in e["ShipmentItemAdjustmentList"]:
             assert item["ItemChargeAdjustmentList"][0]["ChargeAmount"]["CurrencyAmount"] < 0
-            assert item["ItemFeeAdjustmentList"][0]["FeeAmount"]["CurrencyAmount"] > 0
+            fees = {
+                f["FeeType"]: f["FeeAmount"]["CurrencyAmount"]
+                for f in item["ItemFeeAdjustmentList"]
+            }
+            assert fees["Commission"] > 0 and fees["RefundCommission"] <= 0
 
 
-def test_shipments_match_the_sales_report(output, events):
-    """Units shipped and principal equal units ordered and ordered product sales, per day."""
-    for code in ("US", "DE"):
-        report = json.loads((output / "sales_traffic" / code / "2026-07-14.json").read_text())
-        sales = {r["sku"]: r["salesByAsin"] for r in report["salesAndTrafficByAsin"]}
-        shipped = {
-            item["SellerSKU"]: item
-            for c, day, e in events["shipment"]
-            if c == code and day == "2026-07-14"
-            for item in e["ShipmentItemList"]
-        }
-        for sku, item in shipped.items():
-            assert item["QuantityShipped"] == sales[sku]["unitsOrdered"]
-            principal = item["ItemChargeList"][0]["ChargeAmount"]["CurrencyAmount"]
-            assert principal == pytest.approx(sales[sku]["orderedProductSales"]["amount"])
+def test_amazon_keeps_20_percent_of_the_returned_referral_fee_capped_per_unit(events):
+    for code, _day, e in events["refund"]:
+        cap = config.REFUND_ADMIN_CAP_USD / (
+            1.0 if MARKETS[code].currency == "USD" else config.FX_REFERENCE[MARKETS[code].currency]
+        )
+        for item in e["ShipmentItemAdjustmentList"]:
+            fees = {
+                f["FeeType"]: f["FeeAmount"]["CurrencyAmount"]
+                for f in item["ItemFeeAdjustmentList"]
+            }
+            expected = min(
+                round(fees["Commission"] * config.REFUND_ADMIN_RATE, 2),
+                item["QuantityShipped"] * round(cap, 2),
+            )
+            assert -fees["RefundCommission"] == pytest.approx(expected, abs=0.011)
+
+
+def test_shipments_match_the_sales_report_every_day(output, events):
+    """Units shipped and principal equal units ordered and ordered product sales, both ways."""
+    shipped = {
+        (c, day, item["SellerSKU"]): item
+        for c, day, e in events["shipment"]
+        for item in e["ShipmentItemList"]
+    }
+    sold = {}
+    for code in MARKETS:
+        for path in (output / "sales_traffic" / code).glob("*.json"):
+            for r in json.loads(path.read_text(encoding="utf-8"))["salesAndTrafficByAsin"]:
+                if r["salesByAsin"]["unitsOrdered"]:
+                    sold[(code, path.stem, r["sku"])] = r["salesByAsin"]
+    assert shipped.keys() == sold.keys()
+    for key, item in shipped.items():
+        assert item["QuantityShipped"] == sold[key]["unitsOrdered"]
+        principal = item["ItemChargeList"][0]["ChargeAmount"]["CurrencyAmount"]
+        assert principal == pytest.approx(sold[key]["orderedProductSales"]["amount"])
 
 
 # --- Realistic ------------------------------------------------------------------------------
@@ -220,19 +246,32 @@ def test_a_few_products_change_cost_once_mid_year(output):
         assert float(v[1]["unit_cost"]) > float(v[0]["unit_cost"])
 
 
-def test_refunds_come_after_sales_and_never_exceed_them(events):
-    sold = defaultdict(int)
-    refunded = defaultdict(int)
-    first_sale = {}
+def test_each_refund_follows_a_sale_3_to_30_days_earlier(events):
+    lo, hi = config.REFUND_LAG_DAYS
+    sold = defaultdict(set)
     for code, day, e in events["shipment"]:
         for item in e["ShipmentItemList"]:
-            sold[(code, item["SellerSKU"])] += item["QuantityShipped"]
-            first_sale.setdefault((code, item["SellerSKU"]), day)
-            first_sale[(code, item["SellerSKU"])] = min(first_sale[(code, item["SellerSKU"])], day)
+            sold[(code, item["SellerSKU"])].add(date.fromisoformat(day))
     for code, day, e in events["refund"]:
+        posted = date.fromisoformat(day)
+        if (posted - config.START_DATE).days < hi:
+            continue  # may refund a sale from before the data starts
         for item in e["ShipmentItemAdjustmentList"]:
-            key = (code, item["SellerSKU"])
-            refunded[key] += item["QuantityShipped"]
-            lag = (date.fromisoformat(day) - date.fromisoformat(first_sale[key])).days
-            assert lag >= config.REFUND_LAG_DAYS[0]
-    assert all(refunded[k] <= sold[k] for k in refunded)
+            sales = sold[(code, item["SellerSKU"])]
+            assert any(lo <= (posted - s).days <= hi for s in sales), (code, item["SellerSKU"], day)
+
+
+def test_october_has_its_normal_share_of_refunds(pnl, events):
+    october = sum(
+        -_money(i["ItemChargeAdjustmentList"], "ChargeType", "Principal", "ChargeAmount")
+        for c, day, e in events["refund"]
+        if c == "US" and day < "2025-10-31"
+        for i in e["ShipmentItemAdjustmentList"]
+    )
+    november = sum(
+        -_money(i["ItemChargeAdjustmentList"], "ChargeType", "Principal", "ChargeAmount")
+        for c, day, e in events["refund"]
+        if c == "US" and "2025-11-01" <= day < "2025-12-01"
+        for i in e["ShipmentItemAdjustmentList"]
+    )
+    assert october > 0.6 * november  # without sales before the start it would be about half

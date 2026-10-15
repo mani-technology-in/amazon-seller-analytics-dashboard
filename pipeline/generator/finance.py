@@ -3,7 +3,8 @@
 Shipments equal the sales report: each day's units and ordered product sales ship that day
 (a simplification; real orders ship a day or two later). Amazon charges a referral fee
 (FeeType "Commission") on the principal and an FBA fee per unit by product size. A share of
-units is refunded 3 to 30 days later; the refund returns the principal and the referral fee.
+units is refunded 3 to 30 days later; the refund returns the principal and the referral fee,
+less Amazon's refund administration fee (FeeType "RefundCommission").
 
 Product costs are the seller's own table in USD. Most products keep a healthy margin; a few
 lose money once ad spend is counted, and a few get one cost increase during the year.
@@ -28,6 +29,7 @@ class MarketFinance:
     refund_units: np.ndarray  # by the day the refund posts
     refund_cents: np.ndarray
     commission_returned_cents: np.ndarray
+    refund_admin_cents: np.ndarray  # RefundCommission, kept by Amazon on each refund
 
 
 @dataclass
@@ -47,19 +49,32 @@ def market_finance(market: MarketSales, fee_tiers: np.ndarray, rng) -> MarketFin
     fx = 1.0 if network.currency == "USD" else config.FX_REFERENCE[network.currency]
     fee_cents = np.rint(usd_fee / fx * 100).astype(np.int64)
 
+    # Refunds post 3-30 days after the sale. Sales from the month before the data starts are
+    # stood in for by the first month's, so October has its normal share of refunds.
+    lead = config.REFUND_LAG_DAYS[1]
+    units = np.concatenate([market.units[:, :lead], market.units], axis=1)
+    price = np.concatenate([market.price_cents[:, :lead], market.price_cents], axis=1)
     rate = np.array([config.REFUND_RATE[p.category] for p in market.catalog.products])[:, None]
-    refunded = rng.binomial(market.units, np.broadcast_to(rate, market.units.shape))
+    refunded = rng.binomial(units, np.broadcast_to(rate, units.shape))
     lag = rng.integers(config.REFUND_LAG_DAYS[0], config.REFUND_LAG_DAYS[1] + 1, refunded.shape)
     n_days = market.units.shape[1]
     refund_units = np.zeros_like(market.units)
     refund_cents = np.zeros_like(market.sales_cents)
     p_idx, d_idx = np.nonzero(refunded)
-    posted = d_idx + lag[p_idx, d_idx]
-    keep = posted < n_days  # refunds after the last day have not happened yet
+    posted = d_idx + lag[p_idx, d_idx] - lead
+    keep = (posted >= 0) & (posted < n_days)  # later refunds have not happened yet
     p_idx, d_idx, posted = p_idx[keep], d_idx[keep], posted[keep]
-    units = refunded[p_idx, d_idx]
-    np.add.at(refund_units, (p_idx, posted), units)
-    np.add.at(refund_cents, (p_idx, posted), units * market.price_cents[p_idx, d_idx])
+    n = refunded[p_idx, d_idx]
+    np.add.at(refund_units, (p_idx, posted), n)
+    np.add.at(refund_cents, (p_idx, posted), n * price[p_idx, d_idx])
+
+    returned = referral_fee(refund_cents)
+    # Amazon keeps a refund administration fee (FeeType RefundCommission): 20% of the referral
+    # fee it returns, at most USD 5 (or the local equivalent) per unit.
+    cap = int(round(config.REFUND_ADMIN_CAP_USD / fx * 100))
+    admin = np.minimum(
+        np.rint(returned * config.REFUND_ADMIN_RATE).astype(np.int64), refund_units * cap
+    )
 
     return MarketFinance(
         fba_fee_cents=fee_cents,
@@ -67,7 +82,8 @@ def market_finance(market: MarketSales, fee_tiers: np.ndarray, rng) -> MarketFin
         fba_cents=market.units * fee_cents[:, None],
         refund_units=refund_units,
         refund_cents=refund_cents,
-        commission_returned_cents=referral_fee(refund_cents),
+        commission_returned_cents=returned,
+        refund_admin_cents=admin,
     )
 
 
@@ -99,6 +115,7 @@ def product_costs(
             - f.refund_cents.sum(axis=1)
             - f.commission_cents.sum(axis=1)
             + f.commission_returned_cents.sum(axis=1)
+            - f.refund_admin_cents.sum(axis=1)
             - f.fba_cents.sum(axis=1)
             - _product_ad_spend_cents(m, n)
         )

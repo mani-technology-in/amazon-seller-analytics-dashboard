@@ -208,8 +208,9 @@ def _fin_money(cents, currency: str) -> dict:
 def _write_finances(days, market: MarketSales, f, out: Path) -> int:
     """SP-API Finances API v0 listFinancialEvents, one file per day, events grouped by SKU.
 
-    Fees are negative (charged to the seller); a refund's principal is negative and the referral
-    fee it returns is positive, as in Amazon's financial events."""
+    Fees are negative (charged to the seller); a refund's principal is negative, the referral
+    fee it returns is positive and the refund administration fee negative, as in Amazon's
+    financial events. Events post at 12:00 UTC, the same calendar day in every marketplace."""
     out.mkdir(parents=True, exist_ok=True)
     cur = market.marketplace.currency
     name = config.MARKETPLACE_NAMES[market.marketplace.code]
@@ -257,7 +258,11 @@ def _write_finances(days, market: MarketSales, f, out: Path) -> int:
                         {
                             "FeeType": "Commission",
                             "FeeAmount": _fin_money(f.commission_returned_cents[i, d], cur),
-                        }
+                        },
+                        {
+                            "FeeType": "RefundCommission",
+                            "FeeAmount": _fin_money(-f.refund_admin_cents[i, d], cur),
+                        },
                     ],
                 }
                 refunds.append(

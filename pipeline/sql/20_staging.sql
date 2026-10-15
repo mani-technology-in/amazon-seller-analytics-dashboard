@@ -233,45 +233,57 @@ FROM raw.sd_advertised_product
 ORDER BY report_date, split_part(source_file, '/', 2), record->>'adId', loaded_at DESC;
 
 -- Fees, refunds and product cost (CR-1) -----------------------------------------------------
--- Finances API events, one row per SKU per event. Amazon signs amounts from the seller's side
--- (fees and refunded principal negative); these views turn them into positive costs.
+-- Finances API events, summed per SKU, marketplace and day: Amazon sends one event per order,
+-- so a day holds many events for the same SKU. A file loaded twice keeps only its newest load.
+-- Amazon signs amounts from the seller's side (fees and refunded principal negative); these
+-- views turn them into positive costs.
+
+CREATE OR REPLACE VIEW staging.stg_finance_events AS
+SELECT e.*
+FROM raw.finance_events e
+JOIN (
+    SELECT source_file, max(loaded_at) AS loaded_at FROM raw.finance_events GROUP BY source_file
+) newest USING (source_file, loaded_at);
 
 CREATE OR REPLACE VIEW staging.stg_finance_shipments AS
-SELECT DISTINCT ON (e.report_date, split_part(e.source_file, '/', 2), item->>'SellerSKU')
+SELECT
     e.report_date AS date,
     split_part(e.source_file, '/', 2) AS marketplace,
     item->>'SellerSKU' AS sku,
-    (item->>'QuantityShipped')::int AS units,
-    (SELECT sum((c #>> '{ChargeAmount,CurrencyAmount}')::numeric)
+    sum((item->>'QuantityShipped')::int)::int AS units,
+    sum((SELECT sum((c #>> '{ChargeAmount,CurrencyAmount}')::numeric)
         FROM jsonb_array_elements(item->'ItemChargeList') c
-        WHERE c->>'ChargeType' = 'Principal')::numeric(12, 2) AS principal,
-    (-(SELECT sum((f #>> '{FeeAmount,CurrencyAmount}')::numeric)
+        WHERE c->>'ChargeType' = 'Principal'))::numeric(12, 2) AS principal,
+    (-sum((SELECT sum((f #>> '{FeeAmount,CurrencyAmount}')::numeric)
         FROM jsonb_array_elements(item->'ItemFeeList') f
-        WHERE f->>'FeeType' = 'Commission'))::numeric(12, 2) AS referral_fee,
-    (-(SELECT sum((f #>> '{FeeAmount,CurrencyAmount}')::numeric)
+        WHERE f->>'FeeType' = 'Commission')))::numeric(12, 2) AS referral_fee,
+    (-sum((SELECT sum((f #>> '{FeeAmount,CurrencyAmount}')::numeric)
         FROM jsonb_array_elements(item->'ItemFeeList') f
-        WHERE f->>'FeeType' = 'FBAPerUnitFulfillmentFee'))::numeric(12, 2) AS fba_fee,
-    item #>> '{ItemChargeList,0,ChargeAmount,CurrencyCode}' AS currency
-FROM raw.finance_events e
+        WHERE f->>'FeeType' = 'FBAPerUnitFulfillmentFee')))::numeric(12, 2) AS fba_fee,
+    min(item #>> '{ItemChargeList,0,ChargeAmount,CurrencyCode}') AS currency
+FROM staging.stg_finance_events e
 CROSS JOIN LATERAL jsonb_array_elements(e.record->'ShipmentItemList') item
-ORDER BY e.report_date, split_part(e.source_file, '/', 2), item->>'SellerSKU', e.loaded_at DESC;
+GROUP BY 1, 2, 3;
 
 CREATE OR REPLACE VIEW staging.stg_finance_refunds AS
-SELECT DISTINCT ON (e.report_date, split_part(e.source_file, '/', 2), item->>'SellerSKU')
+SELECT
     e.report_date AS date,
     split_part(e.source_file, '/', 2) AS marketplace,
     item->>'SellerSKU' AS sku,
-    (item->>'QuantityShipped')::int AS units,
-    (-(SELECT sum((c #>> '{ChargeAmount,CurrencyAmount}')::numeric)
+    sum((item->>'QuantityShipped')::int)::int AS units,
+    (-sum((SELECT sum((c #>> '{ChargeAmount,CurrencyAmount}')::numeric)
         FROM jsonb_array_elements(item->'ItemChargeAdjustmentList') c
-        WHERE c->>'ChargeType' = 'Principal'))::numeric(12, 2) AS refund,
-    (SELECT sum((f #>> '{FeeAmount,CurrencyAmount}')::numeric)
+        WHERE c->>'ChargeType' = 'Principal')))::numeric(12, 2) AS refund,
+    sum((SELECT sum((f #>> '{FeeAmount,CurrencyAmount}')::numeric)
         FROM jsonb_array_elements(item->'ItemFeeAdjustmentList') f
-        WHERE f->>'FeeType' = 'Commission')::numeric(12, 2) AS referral_fee_returned,
-    item #>> '{ItemChargeAdjustmentList,0,ChargeAmount,CurrencyCode}' AS currency
-FROM raw.finance_events e
+        WHERE f->>'FeeType' = 'Commission'))::numeric(12, 2) AS referral_fee_returned,
+    coalesce(-sum((SELECT sum((f #>> '{FeeAmount,CurrencyAmount}')::numeric)
+        FROM jsonb_array_elements(item->'ItemFeeAdjustmentList') f
+        WHERE f->>'FeeType' = 'RefundCommission')), 0)::numeric(12, 2) AS refund_admin_fee,
+    min(item #>> '{ItemChargeAdjustmentList,0,ChargeAmount,CurrencyCode}') AS currency
+FROM staging.stg_finance_events e
 CROSS JOIN LATERAL jsonb_array_elements(e.record->'ShipmentItemAdjustmentList') item
-ORDER BY e.report_date, split_part(e.source_file, '/', 2), item->>'SellerSKU', e.loaded_at DESC;
+GROUP BY 1, 2, 3;
 
 CREATE OR REPLACE VIEW staging.stg_product_costs AS
 SELECT DISTINCT ON (record->>'sku', record->>'valid_from')
