@@ -8,6 +8,7 @@ Version 1.1 (change request CR-1): a redesign to match the Amazon section of man
 
 ### Added
 
+- Profit data: Amazon fees and refunds shaped like the SP-API Finances API (`finances/<MKT>/`), the seller's product costs (`product_costs.csv`), new marts `fct_profit_daily` and `dim_product_cost`, and a SQL product-profit query (`pipeline/profit.py`) for the profit metrics to be checked against.
 - New look, part 1: design tokens (`design/tokens.json`) shared by the stylesheet and the charts, Plus Jakarta Sans and JetBrains Mono bundled from npm (SIL OFL, served from the demo's own domain), a side navigation in the website's page order, a header with the "Synthetic demo data" label and a **Reduce motion** switch, and a short cross-fade between pages.
 - New look, part 2: KPI tiles with gradient numbers, charts in the accent and violet series with mono labels, tables with mono numbers and "Download CSV" buttons, flags, filters and skeleton loading, all from the tokens. Tailwind's default colours are switched off and a test fails if a component hard-codes a colour.
 - Synthetic data for six marketplaces (US, Canada, Mexico, UK, Germany, France) on five fulfilment networks, each in its own currency with Amazon's marketplace IDs. Mexico and France open during the year and ramp up; the UK and Germany run Sponsored Products ads; Germany and France share EU stock. Monthly exchange rates are included for converting to USD; the conversion arrives with the new screens.

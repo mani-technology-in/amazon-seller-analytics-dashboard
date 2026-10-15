@@ -33,6 +33,8 @@ def test_load_keeps_every_record_and_is_repeatable(world, tmp_path):
         "sd_campaigns": written["sdCampaigns"],
         "sd_targeting": written["sdTargeting"],
         "sd_advertised_product": written["sdAdvertisedProduct"],
+        "finance_events": written["finance_events"],
+        "product_costs": written["product_costs"],
     }
     assert loaded == expected
     assert _counts() == expected

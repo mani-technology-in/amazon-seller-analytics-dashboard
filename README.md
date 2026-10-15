@@ -93,9 +93,13 @@ Pull requests deploy to a preview (`https://pr-<number>.<project>.pages.dev`); m
 | `ads/<MKT>/spCampaigns.json.gz` and seven more | Amazon Ads v3 reports (`timeUnit` DAILY, GZIP_JSON). US has 18 campaigns across Sponsored Products, Brands and Display; UK and Germany have 10 Sponsored Products campaigns each; no ads in CA, MX or FR |
 | `marketplaces.json` | Each marketplace's Amazon marketplace ID, currency and fulfilment network |
 | `fx/rates.csv` | Monthly USD rate for CAD, MXN, GBP and EUR (synthetic, near real levels) |
+| `finances/<MKT>/YYYY-MM-DD.json` | SP-API Finances API v0 `listFinancialEvents`: ShipmentEventList (Principal; referral fee as `Commission`; `FBAPerUnitFulfillmentFee`) and RefundEventList, grouped by SKU per day |
+| `product_costs.csv` | The seller's own unit costs in USD (not from Amazon), with one cost change for four products |
 | `products.json` | The product catalog, with each marketplace's local price |
 
 The data includes a weekly pattern, a Q4 peak, a January dip, Prime Day and Black Friday spikes with deal prices, two product launches, stockouts caused by late shipments (three in the US, one each in the UK and EU networks, plus short gaps of a few days for the slowest seller in small networks), and a few broad or phrase keywords that spend a few hundred dollars a year without selling. Mexico opens in April 2026 and France in February 2026, both ramping up. Over the last 30 days the US is about 60% of revenue, the UK and Germany about 12% each, and Canada, France and Mexico the rest. Ad budgets follow a seasonal pattern (pushed in Q4 and around Prime Day, cut in January), so US TACoS moves between about 9% and 14% by month. Ads stop serving while a product is out of stock. Campaign, targeting and advertised-product reports add up to the same totals, and ad orders never exceed total orders.
+
+Fees and refunds follow Amazon's model: a 15% referral fee on every sale, an FBA fee per unit by product size, and refunds of 2–6% of revenue (highest in Home Storage) that post 3–30 days after the sale and return the referral fee. Over the year the brand makes a net margin of about 23% before Sponsored Brands spend, and three products lose money once their ad spend is counted.
 
 Each file is loaded into the `raw` schema unchanged (one JSON record per row, with Amazon's own field names), so a real SP-API or Ads connector could load the same tables. The marketplace comes from the file's folder.
 
@@ -105,7 +109,7 @@ Each file is loaded into the `raw` schema unchanged (one JSON record per row, wi
 | --- | --- |
 | `raw` | One row per report record, stored as received (JSON with Amazon's field names) |
 | `staging` | Views that type and rename each report (`stg_*`) and keep only the newest copy of a record that was loaded twice |
-| `marts` | `dim_date`, `dim_product`, `dim_marketplace`, `dim_fx_monthly`, `dim_campaign`, `dim_target`; daily facts `fct_sales_daily`, `fct_ads_campaign_daily`, `fct_ads_target_daily`, `fct_ads_product_daily` (each with a `marketplace` column) and `fct_inventory_daily` (with a `network` column). Money stays in local currency; `dim_fx_monthly` converts it to USD |
+| `marts` | `dim_date`, `dim_product`, `dim_marketplace`, `dim_fx_monthly`, `dim_campaign`, `dim_target`; daily facts `fct_sales_daily`, `fct_ads_campaign_daily`, `fct_ads_target_daily`, `fct_ads_product_daily` (each with a `marketplace` column) and `fct_inventory_daily` (with a `network` column). `fct_profit_daily` holds units shipped, principal, refunds, referral and FBA fees and product cost per product, marketplace and day; `dim_product_cost` holds the seller's costs and the dates they apply. Money stays in local currency; `dim_fx_monthly` converts it to USD |
 
 Product-level ad spend covers Sponsored Products and Sponsored Display only, because Amazon reports Sponsored Brands spend per campaign. Account totals include all three ad types.
 

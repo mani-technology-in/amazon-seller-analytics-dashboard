@@ -5,7 +5,8 @@
 
 DROP TABLE IF EXISTS marts.dim_date, marts.dim_product, marts.dim_campaign, marts.dim_target,
     marts.dim_marketplace, marts.dim_fx_monthly, marts.fct_sales_daily, marts.fct_ads_campaign_daily, marts.fct_ads_target_daily,
-    marts.fct_ads_product_daily, marts.fct_inventory_daily;
+    marts.fct_ads_product_daily, marts.fct_inventory_daily, marts.dim_product_cost,
+    marts.fct_profit_daily;
 
 -- Dimensions -------------------------------------------------------------------------------
 
@@ -122,6 +123,55 @@ SELECT
     unsellable
 FROM staging.stg_fba_inventory;
 
+-- Profit (CR-1) ----------------------------------------------------------------------------
+
+-- The seller's unit cost (USD, not from Amazon) and the dates it applies to.
+CREATE TABLE marts.dim_product_cost AS
+SELECT
+    p.asin,
+    c.sku,
+    c.unit_cost,
+    c.currency,
+    c.valid_from,
+    coalesce(
+        lead(c.valid_from) OVER (PARTITION BY c.sku ORDER BY c.valid_from) - 1, DATE '9999-12-31'
+    ) AS valid_to
+FROM staging.stg_product_costs c
+JOIN staging.stg_products p USING (sku);
+
+-- Amazon's money per product, marketplace and day, in the marketplace's currency. Shipments and
+-- referral fees count on the day they post; refunds (and the referral fee they return) on the
+-- day the refund posts. Product cost = units shipped x the unit cost in force, converted from
+-- USD at the month's rate. Ad spend stays in the ads facts and is added by the metrics.
+CREATE TABLE marts.fct_profit_daily AS
+WITH days AS (
+    SELECT date, marketplace, sku FROM staging.stg_finance_shipments
+    UNION
+    SELECT date, marketplace, sku FROM staging.stg_finance_refunds
+)
+SELECT
+    d.date,
+    d.marketplace,
+    p.asin,
+    coalesce(s.units, 0) AS units_shipped,
+    coalesce(s.principal, 0)::numeric(12, 2) AS principal,
+    coalesce(r.units, 0) AS refund_units,
+    coalesce(r.refund, 0)::numeric(12, 2) AS refunds,
+    (coalesce(s.referral_fee, 0) - coalesce(r.referral_fee_returned, 0))::numeric(12, 2)
+        AS referral_fees,
+    coalesce(s.fba_fee, 0)::numeric(12, 2) AS fba_fees,
+    round(coalesce(s.units, 0) * c.unit_cost / fx.usd_rate, 2)::numeric(12, 2) AS product_cost,
+    m.currency
+FROM days d
+JOIN staging.stg_products p ON p.sku = d.sku
+JOIN marts.dim_marketplace m ON m.marketplace = d.marketplace
+JOIN marts.dim_product_cost c ON c.sku = d.sku AND d.date BETWEEN c.valid_from AND c.valid_to
+JOIN marts.dim_fx_monthly fx ON fx.year_month = to_char(d.date, 'YYYY-MM') AND fx.currency = m.currency
+LEFT JOIN staging.stg_finance_shipments s
+    ON s.date = d.date AND s.marketplace = d.marketplace AND s.sku = d.sku
+LEFT JOIN staging.stg_finance_refunds r
+    ON r.date = d.date AND r.marketplace = d.marketplace AND r.sku = d.sku;
+
 -- Keys and indexes -------------------------------------------------------------------------
 
 ALTER TABLE marts.dim_date ADD PRIMARY KEY (date);
@@ -135,3 +185,5 @@ ALTER TABLE marts.fct_ads_campaign_daily ADD PRIMARY KEY (date, campaign_id);
 ALTER TABLE marts.fct_ads_target_daily ADD PRIMARY KEY (date, campaign_id, target_id);
 ALTER TABLE marts.fct_ads_product_daily ADD PRIMARY KEY (date, marketplace, asin);
 ALTER TABLE marts.fct_inventory_daily ADD PRIMARY KEY (date, network, asin);
+ALTER TABLE marts.dim_product_cost ADD PRIMARY KEY (sku, valid_from);
+ALTER TABLE marts.fct_profit_daily ADD PRIMARY KEY (date, marketplace, asin);

@@ -48,3 +48,9 @@ CREATE TABLE IF NOT EXISTS raw.sb_targeting (LIKE raw.sales_traffic_by_asin INCL
 CREATE TABLE IF NOT EXISTS raw.sd_campaigns (LIKE raw.sales_traffic_by_asin INCLUDING DEFAULTS);
 CREATE TABLE IF NOT EXISTS raw.sd_targeting (LIKE raw.sales_traffic_by_asin INCLUDING DEFAULTS);
 CREATE TABLE IF NOT EXISTS raw.sd_advertised_product (LIKE raw.sales_traffic_by_asin INCLUDING DEFAULTS);
+
+-- SP-API Finances API v0 financial events: one row per ShipmentEvent or RefundEvent (a refund
+-- has a ShipmentItemAdjustmentList instead of a ShipmentItemList)
+CREATE TABLE IF NOT EXISTS raw.finance_events (LIKE raw.sales_traffic_by_asin INCLUDING DEFAULTS);
+-- The seller's own unit costs (not from Amazon)
+CREATE TABLE IF NOT EXISTS raw.product_costs (LIKE raw.products INCLUDING DEFAULTS);
