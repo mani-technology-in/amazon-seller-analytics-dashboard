@@ -79,25 +79,36 @@ def test_ids_are_strings(exported):
         ("ads_product_daily.json", "fct_ads_product_daily", "cost"),
         ("ads_target_daily.json", "fct_ads_target_daily", "cost"),
         ("inventory_daily.json", "fct_inventory_daily", "available"),
+        ("profit_daily.json", "fct_profit_daily", "principal"),
+        ("profit_daily.json", "fct_profit_daily", "product_cost"),
     ],
 )
-def test_v1_files_hold_the_us_marketplace_and_match_the_marts(exported, name, mart, column):
-    """The v1.0 pages read US data only, so these files stay US-only until CR-1 PR 6."""
+def test_fact_files_match_the_marts_for_every_marketplace(exported, name, mart, column):
+    """Every marketplace (inventory: network) is exported, each with its own totals."""
     out, _ = exported
-    exported_total = math.fsum(_read(out, name)[column])
-    where = "network = 'US'" if mart == "fct_inventory_daily" else "marketplace = 'US'"
+    data = _read(out, name)
+    key = "network" if mart == "fct_inventory_daily" else "marketplace"
+    exported_totals: dict[str, list[float]] = {}
+    for k, v in zip(data[key], data[column], strict=True):
+        exported_totals.setdefault(k, []).append(v)
     with connect() as conn, conn.cursor() as cur:
-        cur.execute(f"SELECT sum({column}) FROM marts.{mart} WHERE {where}")
-        (mart_total,) = cur.fetchone()
-    assert exported_total == pytest.approx(float(mart_total), abs=0.01)
+        # identifiers come from the fixed list above, never from input
+        cur.execute(f"SELECT {key}, sum({column}) FROM marts.{mart} GROUP BY 1")  # nosemgrep
+        mart_totals = dict(cur.fetchall())
+    assert set(exported_totals) == set(mart_totals)
+    expected = {"network": 5, "ads": 3}.get(key if key == "network" else name[:3], 6)
+    assert len(mart_totals) == expected, (name, sorted(mart_totals))
+    for k, total in mart_totals.items():
+        assert math.fsum(exported_totals[k]) == pytest.approx(float(total), abs=0.01), (name, k)
 
 
 def test_size_budget(exported):
-    """Design budget: first load about 250 KB compressed; keyword file about 1 MB."""
+    """CR-1 design budget: first load under about 300 KB of data compressed; the keyword file,
+    loaded in the background on the Advertising page, under about 1.5 MB."""
     out, _ = exported
     first = sum(_gzip_kb(out / name) for name in FIRST_LOAD)
-    assert first < 250, f"first load {first:.0f} KB"
-    assert _gzip_kb(out / "ads_target_daily.json") < 1024
+    assert first < 300, f"first load {first:.0f} KB"
+    assert _gzip_kb(out / "ads_target_daily.json") < 1536
 
 
 def test_marketplaces_and_exchange_rates(exported):
