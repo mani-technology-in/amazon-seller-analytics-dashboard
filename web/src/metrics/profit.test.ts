@@ -80,7 +80,7 @@ describe('product profit (FR-28, FR-29)', () => {
     expect(three.losesMoney).toBe(false)
   })
 
-  it('lists only products with money in the range', () => {
+  it('lists only products with sales, refunds or ad spend in the range', () => {
     expect(
       productProfitRows(profit, adsProduct, products, { start: '2027-01-01', end: '2027-01-31' }),
     ).toEqual([])

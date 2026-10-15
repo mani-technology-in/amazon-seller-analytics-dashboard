@@ -28,6 +28,7 @@ RANGES = {
     "april_stockout": ("2026-04-01", "2026-04-30"),
     "launch_window": ("2026-03-10", "2026-03-20"),
     "full_year": ("2025-10-01", "2026-09-30"),
+    "first_day": ("2025-10-01", "2025-10-01"),  # some products have ad spend but no sales
 }
 TARGET_ACOS = 0.30
 LOW_STOCK_DAYS = 21
@@ -156,6 +157,30 @@ FROM usd GROUP BY marketplace
 # counts Sponsored Brands spend (reported per campaign only).
 PRODUCT_PROFIT_SQL = f"SELECT asin AS key, p.* FROM ({PRODUCT_PROFIT_USD}) p"
 
+MARKETPLACE_PROFIT_SQL = """
+WITH fx AS (SELECT year_month, currency, usd_rate FROM marts.dim_fx_monthly),
+money AS (
+    SELECT f.marketplace, sum(f.units_shipped) AS units, sum(f.principal * fx.usd_rate) AS revenue,
+           sum((f.refunds + f.referral_fees + f.fba_fees + f.product_cost) * fx.usd_rate) AS costs
+    FROM marts.fct_profit_daily f
+    JOIN fx ON fx.year_month = to_char(f.date, 'YYYY-MM') AND fx.currency = f.currency
+    WHERE f.date BETWEEN %(start)s AND %(end)s
+    GROUP BY f.marketplace
+),
+ads AS (
+    SELECT a.marketplace, sum(a.cost * fx.usd_rate) AS ad_spend
+    FROM marts.fct_ads_product_daily a
+    JOIN marts.dim_marketplace m USING (marketplace)
+    JOIN fx ON fx.year_month = to_char(a.date, 'YYYY-MM') AND fx.currency = m.currency
+    WHERE a.date BETWEEN %(start)s AND %(end)s
+    GROUP BY a.marketplace
+)
+SELECT marketplace AS key, coalesce(units, 0) AS units, coalesce(revenue, 0) AS revenue,
+       coalesce(ad_spend, 0) AS ad_spend,
+       coalesce(revenue, 0) - coalesce(costs, 0) - coalesce(ad_spend, 0) AS net_profit
+FROM money FULL JOIN ads USING (marketplace)
+"""
+
 ACCOUNT_PROFIT_SQL = """
 WITH fx AS (SELECT year_month, currency, usd_rate FROM marts.dim_fx_monthly),
 money AS (
@@ -231,6 +256,7 @@ def compute() -> dict:
                     "products": _rows(cur, PRODUCTS_SQL, p),
                     "marketplaces": _rows(cur, MARKETPLACE_SHARES_SQL, p),
                     "productProfit": _rows(cur, PRODUCT_PROFIT_SQL, p),
+                    "marketplaceProfit": _rows(cur, MARKETPLACE_PROFIT_SQL, p),
                     "accountProfit": _one(cur, ACCOUNT_PROFIT_SQL, p),
                 }
             )

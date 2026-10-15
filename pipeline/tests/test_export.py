@@ -18,6 +18,7 @@ FIRST_LOAD = [
     "campaigns.json",
     "sales_daily.json",
     "ads_campaign_daily.json",
+    "marketplaces.json",
 ]
 
 
@@ -96,8 +97,13 @@ def test_fact_files_match_the_marts_for_every_marketplace(exported, name, mart, 
         cur.execute(f"SELECT {key}, sum({column}) FROM marts.{mart} GROUP BY 1")  # nosemgrep
         mart_totals = dict(cur.fetchall())
     assert set(exported_totals) == set(mart_totals)
-    expected = {"network": 5, "ads": 3}.get(key if key == "network" else name[:3], 6)
-    assert len(mart_totals) == expected, (name, sorted(mart_totals))
+    if key == "network":
+        expected = {"US", "CA", "MX", "UK", "EU"}
+    elif name.startswith("ads_"):
+        expected = {"US", "UK", "DE"}  # ads run only in these marketplaces
+    else:
+        expected = {"US", "CA", "MX", "UK", "DE", "FR"}
+    assert set(mart_totals) == expected, name
     for k, total in mart_totals.items():
         assert math.fsum(exported_totals[k]) == pytest.approx(float(total), abs=0.01), (name, k)
 

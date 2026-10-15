@@ -34,11 +34,23 @@ export class FxRates {
   }
 }
 
+/** The columns of `T` that hold numbers. */
+type NumberColumn<T> = { [K in keyof T]: T[K] extends readonly number[] ? K : never }[keyof T]
+
 /** A copy of the file with the `money` columns converted to USD, row by row. */
 export function toUsd<
   T extends { date: readonly ISODate[]; marketplace: readonly MarketplaceCode[] },
->(file: T, money: (keyof T)[], rates: FxRates): T {
-  const factor = file.date.map((d, i) => rates.usdRate(rates.currencyOf(file.marketplace[i]), d))
+>(file: T, money: NumberColumn<T>[], rates: FxRates): T {
+  const cache = new Map<string, number>() // one rate lookup per marketplace and month
+  const factor = file.date.map((d, i) => {
+    const key = file.marketplace[i] + d.slice(0, 7)
+    let f = cache.get(key)
+    if (f === undefined) {
+      f = rates.usdRate(rates.currencyOf(file.marketplace[i]), d)
+      cache.set(key, f)
+    }
+    return f
+  })
   const out = { ...file }
   for (const k of money) {
     const col = file[k] as unknown as number[]

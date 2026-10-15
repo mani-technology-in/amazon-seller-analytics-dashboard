@@ -74,7 +74,7 @@ def test_product_cost_uses_the_cost_in_force_and_the_months_rate(warehouse, worl
         unit = costs[
             config.COST_CHANGE_DATE if day >= config.COST_CHANGE_DATE else config.COSTS_VALID_FROM
         ]
-        assert float(cost) == pytest.approx(units * unit / float(rate), abs=0.006)
+        assert float(cost) == pytest.approx(units * unit / float(rate), abs=1e-6)
 
 
 def test_sql_profit_shows_three_losing_products_and_a_normal_margin(warehouse):

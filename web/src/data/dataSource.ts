@@ -107,6 +107,19 @@ export class StaticJsonDataSource implements DataSource {
  */
 export function marketplaceView(source: DataSource, code: MarketplaceCode): DataSource {
   const one = new Set([code])
+  // Filter each file once per visit, as the source loads it once.
+  const memo = new Map<string, Promise<unknown>>()
+  const once =
+    <T>(name: string, get: () => Promise<T>): (() => Promise<T>) =>
+    () => {
+      let p = memo.get(name)
+      if (!p) {
+        p = get()
+        p.catch(() => memo.delete(name))
+        memo.set(name, p)
+      }
+      return p as Promise<T>
+    }
   const mine = <T extends { marketplace: MarketplaceCode }>(rows: T[]) =>
     rows.filter((r) => r.marketplace === code)
   return {
@@ -115,14 +128,21 @@ export function marketplaceView(source: DataSource, code: MarketplaceCode): Data
     products: () => source.products(),
     marketplaces: () => source.marketplaces(),
     fxMonthly: () => source.fxMonthly(),
-    campaigns: async () => mine(await source.campaigns()),
-    targets: async () => mine(await source.targets()),
-    salesDaily: async () => forMarketplaces(await source.salesDaily(), one),
-    adsCampaignDaily: async () => forMarketplaces(await source.adsCampaignDaily(), one),
-    adsProductDaily: async () => forMarketplaces(await source.adsProductDaily(), one),
-    adsTargetDaily: async () => forMarketplaces(await source.adsTargetDaily(), one),
-    profitDaily: async () => forMarketplaces(await source.profitDaily(), one),
-    inventoryDaily: async () =>
+    campaigns: once('campaigns', async () => mine(await source.campaigns())),
+    targets: once('targets', async () => mine(await source.targets())),
+    salesDaily: once('salesDaily', async () => forMarketplaces(await source.salesDaily(), one)),
+    adsCampaignDaily: once('adsCampaignDaily', async () =>
+      forMarketplaces(await source.adsCampaignDaily(), one),
+    ),
+    adsProductDaily: once('adsProductDaily', async () =>
+      forMarketplaces(await source.adsProductDaily(), one),
+    ),
+    adsTargetDaily: once('adsTargetDaily', async () =>
+      forMarketplaces(await source.adsTargetDaily(), one),
+    ),
+    profitDaily: once('profitDaily', async () => forMarketplaces(await source.profitDaily(), one)),
+    inventoryDaily: once('inventoryDaily', async () =>
       forNetworks(await source.inventoryDaily(), one, await source.marketplaces()),
+    ),
   }
 }

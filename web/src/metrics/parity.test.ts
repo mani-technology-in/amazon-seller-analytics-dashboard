@@ -23,7 +23,7 @@ import type {
 } from '../data/types'
 import { FxRates, toUsd } from './currency'
 import { forMarketplaces, forNetworks, marketplaceShares } from './marketplace'
-import { accountProfit, productProfitRows } from './profit'
+import { accountProfit, marketplaceProfitRows, productProfitRows } from './profit'
 import { previousPeriod } from './dates'
 import {
   accountKpis,
@@ -75,6 +75,7 @@ interface Fixture {
     products: Record<string, Record<string, Num>>
     marketplaces: Record<string, Record<string, Num>>
     productProfit: Record<string, Record<string, Num>>
+    marketplaceProfit: Record<string, Record<string, Num>>
     accountProfit: Record<string, Num>
   }[]
   inventory: { asOf: string; rows: Record<string, Record<string, Num | boolean>> }
@@ -266,7 +267,7 @@ describe.skipIf(!available)('metrics match SQL on the real data', () => {
   )
 
   it.each(ranges.map((r) => [r.name, r] as const))(
-    '%s: profit for every product and the account, in USD',
+    '%s: profit for every product, every marketplace and the account, in USD',
     (_, r) => {
       const range = { start: r.start, end: r.end }
       const rows = productProfitRows(usd.profit, usd.adsProduct, all.products, range)
@@ -283,6 +284,15 @@ describe.skipIf(!available)('metrics match SQL on the real data', () => {
         close(p.productCost, exp.product_cost, MONEY, `${tag} product cost`)
         close(p.netProfit, exp.net_profit, MONEY, `${tag} net profit`)
         expect(p.losesMoney, tag).toBe((exp.net_profit as number) < 0)
+      }
+      const byMarketplace = marketplaceProfitRows(usd.profit, usd.adsProduct, range)
+      expect(byMarketplace).toHaveLength(Object.keys(r.marketplaceProfit).length)
+      for (const m of byMarketplace) {
+        const exp = r.marketplaceProfit[m.marketplace]
+        expect(m.units).toBe(exp.units)
+        close(m.revenue, exp.revenue, MONEY, `${r.name} ${m.marketplace} revenue`)
+        close(m.adSpend, exp.ad_spend, MONEY, `${r.name} ${m.marketplace} ad spend`)
+        close(m.netProfit, exp.net_profit, MONEY, `${r.name} ${m.marketplace} net profit`)
       }
       const a = accountProfit(usd.profit, usd.adsCampaign, range)
       const exp = r.accountProfit
