@@ -35,6 +35,8 @@ RAW_TABLES = [
     "sales_traffic_by_asin",
     "fba_inventory_snapshot",
     *ADS_TABLES.values(),
+    "finance_events",
+    "product_costs",
 ]
 
 Row = tuple[date | None, str, str]
@@ -86,6 +88,21 @@ def ads_report(src: Path, report_type: str) -> Iterator[Row]:
                 yield date.fromisoformat(record["date"]), rel, json.dumps(record)
 
 
+def finance_events(src: Path) -> Iterator[Row]:
+    """One folder per marketplace: finances/<code>/<date>.json (listFinancialEvents)."""
+    for path in sorted((src / "finances").glob("*/*.json")):
+        events = json.loads(path.read_text(encoding="utf-8"))["payload"]["FinancialEvents"]
+        rel = path.relative_to(src).as_posix()
+        for event in events["ShipmentEventList"] + events["RefundEventList"]:
+            yield date.fromisoformat(event["PostedDate"][:10]), rel, json.dumps(event)
+
+
+def product_costs(src: Path) -> Iterator[Row]:
+    with (src / "product_costs.csv").open(encoding="utf-8", newline="") as f:
+        for record in csv.DictReader(f):
+            yield None, "product_costs.csv", json.dumps(record)
+
+
 def copy_rows(conn: Connection, table: str, rows: Iterator[Row]) -> int:
     n = 0
     with conn.cursor() as cur:
@@ -112,6 +129,8 @@ def load(src: Path) -> dict[str, int]:
         "sales_traffic_by_asin": sales_traffic(src),
         "fba_inventory_snapshot": fba_inventory(src),
         **{table: ads_report(src, rt) for rt, table in ADS_TABLES.items()},
+        "finance_events": finance_events(src),
+        "product_costs": product_costs(src),
     }
     counts = {}
     with connect() as conn:

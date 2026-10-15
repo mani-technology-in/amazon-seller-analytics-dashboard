@@ -7,7 +7,7 @@ carries both countries' demand and is then split into two marketplaces.
 """
 
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import date
 
 import numpy as np
@@ -40,6 +40,8 @@ class World:
     networks: dict[str, Simulation]
     markets: dict[str, MarketSales]
     fx: list[tuple[str, str, float]]  # (year-month, currency, USD per unit)
+    finance: dict = field(default_factory=dict)  # marketplace code -> finance.MarketFinance
+    costs: list = field(default_factory=list)  # finance.ProductCost rows
 
 
 def local_price(usd: float, network: config.Network) -> float:

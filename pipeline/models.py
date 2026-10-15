@@ -21,6 +21,8 @@ MART_TABLES = [
     "fct_ads_target_daily",
     "fct_ads_product_daily",
     "fct_inventory_daily",
+    "dim_product_cost",
+    "fct_profit_daily",
 ]
 
 

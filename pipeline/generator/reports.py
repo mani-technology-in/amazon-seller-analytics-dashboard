@@ -192,7 +192,107 @@ def write_all(world: World, out: Path) -> dict[str, int]:
                 counts[name] = counts.get(name, 0) + n
     for code, sim in world.networks.items():
         counts["fba_inventory"] += _write_fba_inventory(sim, out / "fba_inventory" / code)
+    counts["finance_events"] = sum(
+        _write_finances(world.days, world.markets[code], f, out / "finances" / code)
+        for code, f in world.finance.items()
+    )
+    counts["product_costs"] = _write_product_costs(world, out)
     return counts
+
+
+def _fin_money(cents, currency: str) -> dict:
+    """Finances API v0 Currency: CurrencyCode and CurrencyAmount."""
+    return {"CurrencyCode": currency, "CurrencyAmount": money(cents)}
+
+
+def _write_finances(days, market: MarketSales, f, out: Path) -> int:
+    """SP-API Finances API v0 listFinancialEvents, one file per day, events grouped by SKU.
+
+    Fees are negative (charged to the seller); a refund's principal is negative, the referral
+    fee it returns is positive and the refund administration fee negative, as in Amazon's
+    financial events. Events post at 12:00 UTC, the same calendar day in every marketplace."""
+    out.mkdir(parents=True, exist_ok=True)
+    cur = market.marketplace.currency
+    name = config.MARKETPLACE_NAMES[market.marketplace.code]
+    n = 0
+    for d, day in enumerate(days):
+        posted = f"{day.isoformat()}T12:00:00Z"
+        shipments, refunds = [], []
+        for p in market.catalog.products:
+            i = p.index
+            if market.units[i, d]:
+                item = {
+                    "SellerSKU": p.sku,
+                    "QuantityShipped": int(market.units[i, d]),
+                    "ItemChargeList": [
+                        {
+                            "ChargeType": "Principal",
+                            "ChargeAmount": _fin_money(market.sales_cents[i, d], cur),
+                        }
+                    ],
+                    "ItemFeeList": [
+                        {
+                            "FeeType": "Commission",
+                            "FeeAmount": _fin_money(-f.commission_cents[i, d], cur),
+                        },
+                        {
+                            "FeeType": "FBAPerUnitFulfillmentFee",
+                            "FeeAmount": _fin_money(-f.fba_cents[i, d], cur),
+                        },
+                    ],
+                }
+                shipments.append(
+                    {"MarketplaceName": name, "PostedDate": posted, "ShipmentItemList": [item]}
+                )
+            if f.refund_units[i, d]:
+                item = {
+                    "SellerSKU": p.sku,
+                    "QuantityShipped": int(f.refund_units[i, d]),
+                    "ItemChargeAdjustmentList": [
+                        {
+                            "ChargeType": "Principal",
+                            "ChargeAmount": _fin_money(-f.refund_cents[i, d], cur),
+                        }
+                    ],
+                    "ItemFeeAdjustmentList": [
+                        {
+                            "FeeType": "Commission",
+                            "FeeAmount": _fin_money(f.commission_returned_cents[i, d], cur),
+                        },
+                        {
+                            "FeeType": "RefundCommission",
+                            "FeeAmount": _fin_money(-f.refund_admin_cents[i, d], cur),
+                        },
+                    ],
+                }
+                refunds.append(
+                    {
+                        "MarketplaceName": name,
+                        "PostedDate": posted,
+                        "ShipmentItemAdjustmentList": [item],
+                    }
+                )
+        body = {
+            "payload": {
+                "FinancialEvents": {"ShipmentEventList": shipments, "RefundEventList": refunds}
+            }
+        }
+        (out / f"{day.isoformat()}.json").write_text(
+            json.dumps(body, separators=(",", ":")), encoding="utf-8"
+        )
+        n += len(shipments) + len(refunds)
+    return n
+
+
+def _write_product_costs(world: World, out: Path) -> int:
+    """The seller's own cost table (not from Amazon): one row per SKU and cost change."""
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator="\n")
+    w.writerow(["sku", "unit_cost", "currency", "valid_from"])
+    for c in world.costs:
+        w.writerow([c.sku, f"{c.unit_cost:.2f}", "USD", c.valid_from.isoformat()])
+    (out / "product_costs.csv").write_text(buf.getvalue(), encoding="utf-8")
+    return len(world.costs)
 
 
 def _write_products(world: World, out: Path) -> int:
