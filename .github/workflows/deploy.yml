@@ -84,6 +84,17 @@ jobs:
       - name: Install Chromium, Firefox and WebKit for the smoke test
         working-directory: web
         run: npx playwright install --with-deps chromium firefox webkit
+      - name: EXPERIMENT (temporary, issue 26) Firefox with and without COOP
+        working-directory: web
+        run: |
+          PREVIEW_NO_COOP=1 npx playwright test --project=firefox --repeat-each=4 --retries=0 \
+            --reporter=line --output=test-results/exp-nocoop > nocoop.txt 2>&1 || true
+          npx playwright test --project=firefox --repeat-each=4 --retries=0 \
+            --reporter=line --output=test-results/exp-coop > coop.txt 2>&1 || true
+          a=$(grep -E "^ +[0-9]+ (passed|failed|flaky)" nocoop.txt | tr -s ' ' | tr '\n' ',')
+          b=$(grep -E "^ +[0-9]+ (passed|failed|flaky)" coop.txt | tr -s ' ' | tr '\n' ',')
+          echo "::warning title=Experiment::without COOP: $a with COOP: $b"
+          rm -rf test-results/exp-nocoop test-results/exp-coop
       - name: Smoke test the build
         working-directory: web
         run: npm run smoke -- --output=test-results/build
