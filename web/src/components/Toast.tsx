@@ -1,7 +1,13 @@
 import { useEffect } from 'react'
 
 /** A short confirmation in the words of the action (Toast in the Design System). */
-export function Toast({ message, onClose }: { message: string | null; onClose: () => void }) {
+export interface ToastMessage {
+  /** a new id for every action, so the same words shown twice still restart the timer */
+  id: number
+  text: string
+}
+
+export function Toast({ message, onClose }: { message: ToastMessage | null; onClose: () => void }) {
   useEffect(() => {
     if (!message) return
     const t = setTimeout(onClose, 6000)
@@ -15,7 +21,10 @@ export function Toast({ message, onClose }: { message: string | null; onClose: (
       className="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex justify-end md:inset-x-auto md:right-6 md:bottom-6"
     >
       {message ? (
-        <div className="toast-in pointer-events-auto flex max-w-[420px] items-center gap-3 rounded-lg bg-toast-ground py-3 pr-3.5 pl-4 text-body text-surface-page shadow-toast">
+        <div
+          key={message.id}
+          className="toast-in pointer-events-auto flex max-w-[420px] items-center gap-3 rounded-lg bg-toast-ground py-3 pr-3.5 pl-4 text-body text-surface-page shadow-toast"
+        >
           <svg
             width="18"
             height="18"
@@ -32,7 +41,7 @@ export function Toast({ message, onClose }: { message: string | null; onClose: (
               strokeLinejoin="round"
             />
           </svg>
-          <span>{message}</span>
+          <span>{message.text}</span>
           <button
             type="button"
             onClick={onClose}

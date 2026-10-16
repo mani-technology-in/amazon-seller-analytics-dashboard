@@ -28,7 +28,7 @@ export function ProfitWaterfall({ steps, format, formatFull, runKey }: ProfitWat
   const net = steps[steps.length - 1]
   const summary = `Revenue ${formatFull(steps[0].to)}; after ${steps
     .slice(1, -1)
-    .map((s) => `${s.label.toLowerCase()} ${formatFull(s.from - s.to)}`)
+    .map((s) => `${s.label} ${formatFull(s.from - s.to)}`)
     .join(', ')}, net profit is ${formatFull(net.to)}.`
 
   return (
@@ -69,7 +69,9 @@ export function ProfitWaterfall({ steps, format, formatFull, runKey }: ProfitWat
                 className={`wf-fade absolute -translate-x-1/2 -translate-y-full pb-1.5 font-mono text-caption whitespace-nowrap tabular-nums ${isNet ? (loss ? 'font-medium text-critical' : 'font-medium text-ink') : 'text-ink-2'}`}
                 style={{ left: `${i * slot + slot / 2}%`, top: `${y(top)}%`, ...fade }}
               >
-                {s.kind === 'cost' ? `−${format(s.from - s.to)}` : format(s.to)}
+                {s.kind === 'cost'
+                  ? `${s.from >= s.to ? '−' : '+'}${format(Math.abs(s.from - s.to))}`
+                  : format(s.to)}
               </div>
               {next && next.kind === 'cost' ? (
                 <div

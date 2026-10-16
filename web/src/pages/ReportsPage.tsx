@@ -5,7 +5,7 @@ import { useMoney } from '../app/money'
 import { useDatasets } from '../app/useDatasets'
 import { FilterBar } from '../components/FilterBar'
 import { ErrorBox, Loading, PageTitle } from '../components/Layout'
-import { Toast } from '../components/Toast'
+import { Toast, type ToastMessage } from '../components/Toast'
 import type { Manifest } from '../data/types'
 import { downloadCsv, toCsv } from '../lib/csv'
 import { count, dateLong } from '../lib/format'
@@ -47,7 +47,7 @@ export function ReportsPage() {
   const manifest = useOutletContext<Manifest>()
   const { filters, update } = useFilters(manifest.dataStart, manifest.dataEnd)
   const m = useMoney()
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast, setToast] = useState<ToastMessage | null>(null)
   const closeToast = useCallback(() => setToast(null), [])
   const data = useDatasets(
     'salesDaily',
@@ -173,7 +173,10 @@ export function ReportsPage() {
                   title={r.rows ? undefined : 'No rows for these filters'}
                   onClick={() => {
                     downloadCsv(`${r.id}-${suffix}.csv`, r.build())
-                    setToast(`${r.title} downloaded, ${count(r.rows)} rows.`)
+                    setToast({
+                      id: Date.now(),
+                      text: `${r.title} downloaded, ${count(r.rows)} rows.`,
+                    })
                   }}
                   className="col-span-2 inline-flex h-10 items-center justify-center gap-2 rounded-md bg-accent-strong px-3.5 text-body font-semibold text-surface-page transition-transform duration-(--duration-press) ease-out hover:bg-accent-strong-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-surface-sunken disabled:text-ink-disabled md:col-span-1"
                 >

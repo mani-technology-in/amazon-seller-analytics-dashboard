@@ -112,6 +112,8 @@ test('Advertising: KPIs, the ACoS trend with the target, and no ads where none r
 }) => {
   await page.goto('/advertising?acos=25')
   const kpis = page.getByRole('region', { name: 'Key figures' })
+  // three marketplaces' ad files: Firefox on CI can need more than the default 5 seconds
+  await expect(kpis).toBeVisible({ timeout: 15_000 })
   for (const label of ['Ad spend', 'Ad sales', 'ACoS', 'TACoS', 'ROAS']) {
     await expect(kpis.getByText(label, { exact: true })).toBeVisible()
   }

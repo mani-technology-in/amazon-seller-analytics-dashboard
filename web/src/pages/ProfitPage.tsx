@@ -202,6 +202,7 @@ export function ProfitPage() {
               previous={prev(p?.productCost)}
               better="neutral"
               hint={COST_NOTE}
+              aside={<span className="text-caption text-ink-3">{COST_NOTE}</span>}
             />
             <KpiTile
               label="Net profit"
@@ -264,8 +265,8 @@ export function ProfitPage() {
             title="Profit by product"
             description={
               view.losers
-                ? `${view.losers} product${view.losers === 1 ? ' loses' : 's lose'} money in this range. Ad spend here leaves out Sponsored Brands.`
-                : 'Ad spend here leaves out Sponsored Brands, which Amazon reports per campaign.'
+                ? `${view.losers} product${view.losers === 1 ? ' loses' : 's lose'} money in this range. Product cost is entered by the seller, not from Amazon. Ad spend here leaves out Sponsored Brands.`
+                : 'Product cost is entered by the seller, not from Amazon. Ad spend here leaves out Sponsored Brands, which Amazon reports per campaign.'
             }
             rows={view.products}
             rowKey={(r) => r.asin}
@@ -278,7 +279,7 @@ export function ProfitPage() {
 
           <DataTable<MarketplaceProfitRow>
             title="Profit by marketplace"
-            description="Ads run in the US, the UK and Germany only, so their margins are lower. Ad spend here leaves out Sponsored Brands."
+            description="Ads run in the US, the UK and Germany only, so their margins are lower. Product cost is entered by the seller, not from Amazon. Ad spend here leaves out Sponsored Brands."
             rows={view.markets}
             rowKey={(r) => r.marketplace}
             csvName="marketplace-profit.csv"
