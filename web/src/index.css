@@ -128,6 +128,42 @@
   animation: none !important;
 }
 
+/* Profit chart (the signature moment): each bar grows from where it starts, 110 ms apart. */
+.wf-bar {
+  transform-box: fill-box;
+  animation: wf-scale var(--duration-step) var(--ease-out) both;
+}
+.wf-grow {
+  transform-origin: 50% 100%;
+}
+.wf-drop {
+  transform-origin: 50% 0;
+}
+.wf-fade {
+  animation: wf-fade var(--duration-ui) linear both;
+}
+@keyframes wf-scale {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes wf-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Toasts rise in by 8 px. */
+.toast-in {
+  animation: toast-in var(--duration-enter) var(--ease-out) both;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
 /* Page changes: a 160 ms cross-fade of the content area only (View Transitions API). */
 .page-content {
   view-transition-name: page-content;

@@ -149,6 +149,58 @@ test('a one-day stock-out is shaded on the stock chart', async ({ page }) => {
   expect((await band.boundingBox())!.width).toBeGreaterThan(10)
 })
 
+test('Profit: the chart walks from revenue to net profit, and loss-making products are flagged (FR-27 to FR-31)', async ({
+  page,
+}) => {
+  await page.goto('/profit')
+  const kpis = page.getByRole('region', { name: 'Key figures' })
+  for (const label of [
+    'Revenue',
+    'Amazon fees',
+    'Ad spend',
+    'Product cost',
+    'Net profit',
+    'Net margin',
+  ]) {
+    await expect(kpis.getByText(label, { exact: true })).toBeVisible()
+  }
+  const chart = page.getByRole('img', { name: /^Revenue .*net profit is/ })
+  await expect(chart).toBeVisible()
+  // the screen-reader table lists every step
+  const steps = page.getByRole('table', { name: 'From revenue to net profit' }).getByRole('row')
+  await expect(steps).toHaveCount(7)
+  await expect(page.getByText('Loses money').first()).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'Total', exact: true }).first()).toBeVisible()
+  // product cost says where it comes from (FR-31)
+  await expect(page.getByText(/entered by the seller, not taken from Amazon/)).toBeVisible()
+})
+
+test('Reports: each report downloads a CSV with its row count, and says so (FR-32)', async ({
+  page,
+}) => {
+  await page.goto('/reports?mkt=US')
+  const item = page.getByRole('listitem').filter({ hasText: 'Product profit' })
+  const rows = Number((await item.getByText(/ rows$/).textContent())!.replace(/\D/g, ''))
+  expect(rows).toBeGreaterThan(0)
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    item.getByRole('button', { name: 'Download CSV' }).click(),
+  ])
+  expect(download.suggestedFilename()).toMatch(/^product-profit-us-\d{4}-\d{2}-\d{2}-to-/)
+  const stream = await download.createReadStream()
+  const chunks: Buffer[] = []
+  for await (const c of stream) chunks.push(c as Buffer)
+  const lines = Buffer.concat(chunks).toString('utf-8').trim().split(/\r?\n/)
+  expect(lines[0]).toContain('Product cost, entered by the seller (USD)')
+  expect(lines.length).toBe(rows + 1)
+  await expect(page.getByText(/^Product profit downloaded, [\d,]+ rows\.$/)).toBeVisible()
+  // a marketplace with no ads: the campaign report has nothing to download
+  await page.goto('/reports?mkt=MX')
+  await expect(
+    page.getByRole('listitem').filter({ hasText: 'Campaign performance' }).getByRole('button'),
+  ).toBeDisabled()
+})
+
 test('old Products links open the Sales page, filters kept (FR-16)', async ({ page }) => {
   await page.goto('/products?preset=last7')
   await expect(page).toHaveURL(/\/sales\?preset=last7$/)
@@ -187,10 +239,14 @@ test('dates with no data fall back to the default range and say so', async ({ pa
 
 test('every page passes an automated accessibility check (WCAG 2.2 AA)', async ({ page }) => {
   test.slow() // four full scans; Firefox and WebKit in CI need more than 30 seconds
-  for (const path of ['/', '/sales', '/advertising', '/inventory']) {
+  for (const path of ['/', '/sales', '/inventory', '/advertising', '/profit', '/reports']) {
     await page.goto(path)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-    await expect(page.getByRole('status')).toHaveCount(0)
+    await expect(page.getByRole('status')).toHaveCount(0, { timeout: 15_000 })
+    // let the Profit chart finish building: half-faded labels would fail the contrast check
+    await page.waitForFunction(() =>
+      document.getAnimations().every((a) => a.playState !== 'running'),
+    )
     const { violations } = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
       .analyze()
@@ -264,10 +320,10 @@ test('a table exports CSV', async ({ page }) => {
 })
 
 test('the page never scrolls sideways at phone width @phone', async ({ page }) => {
-  for (const path of ['/', '/sales', '/advertising', '/inventory']) {
+  for (const path of ['/', '/sales', '/inventory', '/advertising', '/profit', '/reports']) {
     await page.goto(path)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-    await expect(page.getByRole('status')).toHaveCount(0)
+    await expect(page.getByRole('status')).toHaveCount(0, { timeout: 15_000 })
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     )

@@ -30,6 +30,10 @@ function ProductsRedirect() {
   const { search } = useLocation()
   return <Navigate replace to={{ pathname: asin ? `/sales/${asin}` : '/sales', search }} />
 }
+const ProfitPage = lazy(() => import('./pages/ProfitPage').then((m) => ({ default: m.ProfitPage })))
+const ReportsPage = lazy(() =>
+  import('./pages/ReportsPage').then((m) => ({ default: m.ReportsPage })),
+)
 const InventoryPage = lazy(() =>
   import('./pages/InventoryPage').then((m) => ({ default: m.InventoryPage })),
 )
@@ -45,6 +49,8 @@ const router = createBrowserRouter(
       <Route path="products/:asin" element={<ProductsRedirect />} />
       <Route path="advertising" element={<AdvertisingPage />} />
       <Route path="inventory" element={<InventoryPage />} />
+      <Route path="profit" element={<ProfitPage />} />
+      <Route path="reports" element={<ReportsPage />} />
       <Route path="*" element={<PageTitle title="Page not found" />} />
     </Route>,
   ),

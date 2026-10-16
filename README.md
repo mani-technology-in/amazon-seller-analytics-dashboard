@@ -22,6 +22,8 @@ All data is synthetic. It is generated for a fictional brand ("Demo Brand") and 
 | Sales | Six KPI tiles; revenue by marketplace; a marketplace table with share of revenue; the product table with each product's revenue by marketplace, and a daily detail page per ASIN | FR-11, FR-12, FR-21, FR-22 |
 | Advertising | Ad spend, ad sales, ACoS, TACoS and ROAS tiles; the ACoS and TACoS trend against the target; top 5 campaigns; campaign table with marketplace; keyword and target table flagging spend with no sales and ACoS above the target; filters for ad type and campaign | FR-8 to FR-10 |
 | Inventory | Five stock tiles; stock over time for one product and network, with stock-out days marked; one row per product per fulfilment network: available and inbound units, average daily units, days of cover, low-stock and out-of-stock flags | FR-13, FR-14 |
+| Profit | Six profit tiles; a chart from revenue to net profit, one step per cost; product and marketplace profit tables with loss flags and totals | FR-27 to FR-31 |
+| Reports | Four ready-made CSV reports for the current filters, and the exchange rates used | FR-32 |
 
 Every page shares one filter bar (marketplace, US dollars or the marketplace's own currency, date presets or a custom range, previous-period comparison, target ACoS, low-stock threshold). Filters live in the URL, so any view can be shared. Every table sorts by any column and exports to CSV.
 
