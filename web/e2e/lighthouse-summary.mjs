@@ -26,15 +26,26 @@ const rows = [...byUrl].map(([url, runs]) => {
     lcpRuns: runs
       .map((l) => (l.audits['largest-contentful-paint'].numericValue / 1000).toFixed(1))
       .join(', '),
+    // what each run counted as the largest element, to see what holds LCP back
+    lcpElements: [
+      ...new Set(
+        runs.map(
+          (l) =>
+            (l.audits['lcp-breakdown-insight']?.details?.items ?? []).find((i) => i.type === 'node')
+              ?.selector ?? '?',
+        ),
+      ),
+    ].join(' | '),
   }
 })
 const table = [
   '### Lighthouse (phone, simulated slow 4G, median of 3 runs)',
   '',
-  '| Page | Performance | Accessibility | LCP | CLS | TBT |',
-  '| --- | --- | --- | --- | --- | --- |',
+  '| Page | Performance | Accessibility | LCP | CLS | TBT | LCP of each run (s) |',
+  '| --- | --- | --- | --- | --- | --- | --- |',
   ...rows.map(
-    (r) => `| ${r.page} | ${r.performance} | ${r.accessibility} | ${r.lcp} | ${r.cls} | ${r.tbt} |`,
+    (r) =>
+      `| ${r.page} | ${r.performance} | ${r.accessibility} | ${r.lcp} | ${r.cls} | ${r.tbt} | ${r.lcpRuns} |`,
   ),
   '',
   'Budgets: LCP over 5 s, CLS over 0.1 or accessibility under 95 fail the check; TBT over 600 ms is a warning. Target LCP: 2.5 s.',
@@ -42,6 +53,6 @@ const table = [
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, table + '\n')
 for (const r of rows) {
   console.log(
-    `::notice title=Lighthouse ${r.page}::performance ${r.performance}, accessibility ${r.accessibility}, LCP ${r.lcp}, CLS ${r.cls}, TBT ${r.tbt}`,
+    `::notice title=Lighthouse ${r.page}::median performance ${r.performance}, accessibility ${r.accessibility}, LCP ${r.lcp} (runs ${r.lcpRuns}; element ${r.lcpElements}), CLS ${r.cls}, TBT ${r.tbt}`,
   )
 }
