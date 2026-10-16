@@ -244,3 +244,35 @@ export function stockCover(
   }
   return { total: cover(totalA, totalU), byAsin }
 }
+
+export interface StockSeries {
+  dates: ISODate[]
+  available: (number | null)[]
+  /** runs of days with nothing available */
+  outOfStock: { start: ISODate; end: ISODate }[]
+}
+
+/** Available units per day for one product in one fulfilment network (FR-24). */
+export function stockSeries(
+  inventory: InventoryDaily,
+  asin: string,
+  network: string,
+  range: DateRange,
+): StockSeries {
+  const dates = daysOf(range)
+  const at = new Map(dates.map((d, i) => [d, i]))
+  const available: (number | null)[] = dates.map(() => null)
+  for (let i = 0; i < inventory.date.length; i++) {
+    if (inventory.asin[i] !== asin || inventory.network[i] !== network) continue
+    const k = at.get(inventory.date[i])
+    if (k !== undefined) available[k] = inventory.available[i]
+  }
+  const outOfStock: StockSeries['outOfStock'] = []
+  available.forEach((v, i) => {
+    if (v === null || v > 0) return
+    const last = outOfStock[outOfStock.length - 1]
+    if (last && last.end === dates[i - 1]) last.end = dates[i]
+    else outOfStock.push({ start: dates[i], end: dates[i] })
+  })
+  return { dates, available, outOfStock }
+}
