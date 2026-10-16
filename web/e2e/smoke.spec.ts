@@ -318,6 +318,8 @@ test('the security headers are sent and chart tooltips break no CSP rule', async
   expect(headers['strict-transport-security']).toContain('max-age=')
   // left out on purpose: it made Firefox automation miss page loads (#26), see public/_headers
   expect(headers['cross-origin-opener-policy']).toBeUndefined()
+  // Cloudflare Pages' default "*" is removed: other sites cannot read the data (ZAP)
+  expect(headers['access-control-allow-origin']).toBeUndefined()
   // let the page finish loading its code and data before leaving it: WebKit reports aborted
   // loads as errors
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()

@@ -3,20 +3,31 @@
 import { appendFileSync, readFileSync } from 'node:fs'
 
 const manifest = JSON.parse(readFileSync('lhci/manifest.json', 'utf-8'))
-const rows = manifest
-  .filter((r) => r.isRepresentativeRun)
-  .map((r) => {
-    const lhr = JSON.parse(readFileSync(r.jsonPath, 'utf-8'))
-    const a = lhr.audits
-    return {
-      page: new URL(r.url).pathname,
-      performance: Math.round(lhr.categories.performance.score * 100),
-      accessibility: Math.round(lhr.categories.accessibility.score * 100),
-      lcp: (a['largest-contentful-paint'].numericValue / 1000).toFixed(1) + ' s',
-      cls: a['cumulative-layout-shift'].numericValue.toFixed(3),
-      tbt: Math.round(a['total-blocking-time'].numericValue) + ' ms',
-    }
-  })
+// The median of each figure over the runs of a page, as the budgets are checked.
+const median = (xs) => {
+  const s = [...xs].sort((a, b) => a - b)
+  return s[Math.floor(s.length / 2)]
+}
+const byUrl = new Map()
+for (const r of manifest) {
+  const lhr = JSON.parse(readFileSync(r.jsonPath, 'utf-8'))
+  if (!byUrl.has(r.url)) byUrl.set(r.url, [])
+  byUrl.get(r.url).push(lhr)
+}
+const rows = [...byUrl].map(([url, runs]) => {
+  const m = (f) => median(runs.map(f))
+  return {
+    page: new URL(url).pathname,
+    performance: Math.round(m((l) => l.categories.performance.score) * 100),
+    accessibility: Math.round(m((l) => l.categories.accessibility.score) * 100),
+    lcp: (m((l) => l.audits['largest-contentful-paint'].numericValue) / 1000).toFixed(1) + ' s',
+    cls: m((l) => l.audits['cumulative-layout-shift'].numericValue).toFixed(3),
+    tbt: Math.round(m((l) => l.audits['total-blocking-time'].numericValue)) + ' ms',
+    lcpRuns: runs
+      .map((l) => (l.audits['largest-contentful-paint'].numericValue / 1000).toFixed(1))
+      .join(', '),
+  }
+})
 const table = [
   '### Lighthouse (phone, simulated slow 4G, median of 3 runs)',
   '',
