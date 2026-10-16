@@ -9,8 +9,10 @@ import type {
   AdsCampaignDaily,
   AdsProductDaily,
   MarketplaceCode,
+  OverviewDaily,
   Product,
   ProfitDaily,
+  ProfitSummaryDaily,
 } from '../data/types'
 import { inRange, type DateRange } from './dates'
 import { ratio } from './metrics'
@@ -168,6 +170,31 @@ export function accountProfit(
   addProfit(by, () => 'all', profit, range)
   addAds(by, () => 'all', adsCampaign, range)
   return line(by.get('all') ?? zero())
+}
+
+/**
+ * The account's profit from the two small pre-totalled files: the same figures as
+ * accountProfit, without downloading every product's finances (the Profit page's first view).
+ */
+export function accountProfitFromSummary(
+  p: ProfitSummaryDaily,
+  o: OverviewDaily,
+  range: DateRange,
+): ProfitLine {
+  const s = zero()
+  for (let i = 0; i < p.date.length; i++) {
+    if (!inRange(p.date[i], range)) continue
+    s.units += p.units_shipped[i]
+    s.revenue += p.principal[i]
+    s.refunds += p.refunds[i]
+    s.referralFees += p.referral_fees[i]
+    s.fbaFees += p.fba_fees[i]
+    s.productCost += p.product_cost[i]
+  }
+  for (let i = 0; i < o.date.length; i++) {
+    if (inRange(o.date[i], range)) s.adSpend += o.ad_spend[i]
+  }
+  return line(s)
 }
 
 export interface WaterfallStep {

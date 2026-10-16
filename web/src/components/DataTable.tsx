@@ -9,6 +9,9 @@ import {
 import { useMemo, useState, type ReactNode } from 'react'
 import { downloadCsv, toCsv } from '../lib/csv'
 
+/** Rows drawn before "Show all". */
+export const ROW_LIMIT = 100
+
 export interface Column<T> {
   id: string
   header: string
@@ -30,6 +33,10 @@ interface DataTableProps<T> {
   rowKey: (row: T) => string
   emptyText?: string
   toolbar?: ReactNode
+  /** a totals row under the table: not sorted, not in the CSV; its first cell says "Total" */
+  footer?: T
+  /** a line under the title */
+  description?: ReactNode
 }
 
 /**
@@ -45,8 +52,15 @@ export function DataTable<T>({
   rowKey,
   emptyText = 'Nothing to show for these filters.',
   toolbar,
+  footer,
+  description,
 }: DataTableProps<T>) {
   const [sorting, setSorting] = useState<SortingState>(initialSort ? [initialSort] : [])
+  // Long tables draw their first rows and the rest on request: drawing hundreds of rows at once
+  // blocks the page (TBT). Sorting and the CSV always cover every row.
+  // "Show all" applies to these rows only: new filters start again from the first rows
+  const [showAllFor, setShowAllFor] = useState<T[] | null>(null)
+  const showAll = showAllFor === rows
 
   const defs = useMemo<ColumnDef<T>[]>(
     () =>
@@ -106,9 +120,12 @@ export function DataTable<T>({
   return (
     <section className="min-w-0 rounded-lg border border-surface-sunken bg-surface-page">
       <header className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-        <h2 className="text-section-title text-ink">
-          {title} <span className="font-normal text-ink-3">({rows.length})</span>
-        </h2>
+        <div>
+          <h2 className="text-section-title text-ink">
+            {title} <span className="font-normal text-ink-3">({rows.length})</span>
+          </h2>
+          {description ? <p className="mt-0.5 text-small text-ink-3">{description}</p> : null}
+        </div>
         <div className="flex flex-wrap items-center gap-3">
           {toolbar}
           <button
@@ -163,7 +180,7 @@ export function DataTable<T>({
                 </td>
               </tr>
             ) : (
-              ordered.map((r) => (
+              (showAll ? ordered : ordered.slice(0, ROW_LIMIT)).map((r) => (
                 <tr key={r.id} className="border-t border-surface-sunken hover:bg-surface-hover">
                   {r.getVisibleCells().map((c) => {
                     const meta = c.column.columnDef.meta as Column<T>
@@ -180,6 +197,39 @@ export function DataTable<T>({
               ))
             )}
           </tbody>
+          {!showAll && ordered.length > ROW_LIMIT ? (
+            <tbody>
+              <tr className="border-t border-surface-sunken">
+                <td colSpan={columns.length} className="px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAllFor(rows)}
+                    className="inline-flex min-h-9 items-center rounded-md px-2 text-small font-semibold text-accent-strong hover:bg-surface-hover"
+                  >
+                    Show all {ordered.length} rows
+                  </button>
+                  <span className="text-caption text-ink-3">
+                    {' '}
+                    (showing the first {ROW_LIMIT}; Download CSV has every row)
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          ) : null}
+          {footer && ordered.length ? (
+            <tfoot className="sticky bottom-0 bg-surface-side font-semibold">
+              <tr className="border-t border-line">
+                {columns.map((c, i) => (
+                  <td
+                    key={c.id}
+                    className={`whitespace-nowrap px-3 py-2.5 ${c.align === 'right' ? 'text-right font-mono text-table-number text-ink tabular-nums' : 'text-ink'}`}
+                  >
+                    {i === 0 ? 'Total' : c.cell ? c.cell(footer) : String(c.value(footer) ?? '')}
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
+          ) : null}
         </table>
       </div>
     </section>

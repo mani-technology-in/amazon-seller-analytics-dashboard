@@ -1,17 +1,19 @@
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { trackPageView } from '../app/analytics'
 import { useDatasets } from '../app/useDatasets'
 import { useReduceMotion } from '../app/motion'
 import { dateLong } from '../lib/format'
 import { ReduceMotionSwitch } from './ReduceMotionSwitch'
 
-// The website's page order; Products stands where Sales will go, and Sales, Profit and
-// Reports join this list with their pages (CR-1 PR 6 and PR 8).
+// The website's page order (FR-16).
 const NAV = [
   { to: '/', label: 'Overview', end: true },
-  { to: '/products', label: 'Products' },
+  { to: '/sales', label: 'Sales' },
   { to: '/inventory', label: 'Inventory' },
   { to: '/advertising', label: 'Advertising' },
+  { to: '/profit', label: 'Profit' },
+  { to: '/reports', label: 'Reports' },
 ]
 
 const BUILT_BY = (
@@ -23,8 +25,10 @@ const BUILT_BY = (
 /** Page frame: side navigation with the store and data date, and the content area (FR-4, FR-16, FR-19). */
 export function Layout() {
   const manifest = useDatasets('manifest')
-  const { search } = useLocation()
+  const { search, pathname } = useLocation()
   const reduced = useReduceMotion()
+  // one anonymous page view per page (filters changing in the URL are not new views)
+  useEffect(() => trackPageView(pathname), [pathname])
   const brand = manifest.status === 'ready' ? manifest.data.manifest.brand : 'Demo Brand'
   const initials = brand
     .split(/\s+/)
@@ -45,7 +49,7 @@ export function Layout() {
           </div>
           <div>
             <div className="font-semibold">{brand}</div>
-            <div className="text-caption text-ink-3">Seller workspace · Amazon US</div>
+            <div className="text-caption text-ink-3">Seller workspace</div>
           </div>
         </div>
         <nav aria-label="Pages">

@@ -18,6 +18,15 @@ export const MARKETPLACE_CODES: readonly MarketplaceCode[] = ['US', 'CA', 'MX', 
 
 export type MarketplaceChoice = 'all' | MarketplaceCode
 
+export const MARKETPLACE_NAMES: Record<MarketplaceCode, string> = {
+  US: 'United States',
+  CA: 'Canada',
+  MX: 'Mexico',
+  UK: 'United Kingdom',
+  DE: 'Germany',
+  FR: 'France',
+}
+
 export function selectedCodes(choice: MarketplaceChoice): Set<MarketplaceCode> {
   return new Set(choice === 'all' ? MARKETPLACE_CODES : [choice])
 }
@@ -68,7 +77,10 @@ export interface MarketplaceShare {
  * Revenue, orders and units per marketplace with each one's share of revenue, largest first.
  * The sales must be in one currency (USD) so the shares add up to 100%.
  */
-export function marketplaceShares(salesUsd: SalesDaily, range: DateRange): MarketplaceShare[] {
+export function marketplaceShares(
+  salesUsd: Pick<SalesDaily, 'date' | 'marketplace' | 'sales' | 'orders' | 'units'>,
+  range: DateRange,
+): MarketplaceShare[] {
   const by = new Map<MarketplaceCode, { revenue: number; orders: number; units: number }>()
   for (let i = 0; i < salesUsd.date.length; i++) {
     if (!inRange(salesUsd.date[i] as ISODate, range)) continue

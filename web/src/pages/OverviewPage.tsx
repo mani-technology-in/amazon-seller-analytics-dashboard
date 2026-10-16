@@ -1,76 +1,120 @@
 import { useMemo } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
-import { useDatasets } from '../app/useDatasets'
 import { useFilters } from '../app/filters'
+import { useMoney } from '../app/money'
+import { useDatasets, useDatasetsAfter } from '../app/useDatasets'
 import { DataTable, type Column } from '../components/DataTable'
 import { FilterBar } from '../components/FilterBar'
 import { KpiTile } from '../components/KpiTile'
 import { ErrorBox, Loading, PageTitle } from '../components/Layout'
+import { SmallMultiples } from '../components/SmallMultiples'
+import { Sparkline } from '../components/Sparkline'
 import { TrendChart } from '../components/TrendChart'
 import type { Manifest } from '../data/types'
-import { count, money, moneyCompact, multiple, pct } from '../lib/format'
+import { count, dateShort } from '../lib/format'
+import { rangeLength } from '../metrics/dates'
+import { MARKETPLACE_NAMES } from '../metrics/marketplace'
+import { productRows, topBy } from '../metrics/metrics'
 import {
-  accountKpis,
-  campaignRows,
-  dailySeries,
-  productRows,
-  topBy,
-  type CampaignRow,
-  type ProductRow,
-} from '../metrics/metrics'
+  daysOf,
+  overviewTotals,
+  revenueAndSpend,
+  stockCover,
+  unitsByMarketplace,
+} from '../metrics/sales'
+
+interface TopRow {
+  asin: string
+  title: string
+  orders: number
+  revenue: number
+  cover: number | null
+}
+
+const cover = (v: number | null) => (v === null ? '–' : `${Math.round(v)} days`)
 
 export function OverviewPage() {
   const manifest = useOutletContext<Manifest>()
   const { filters, update } = useFilters(manifest.dataStart, manifest.dataEnd)
-  const data = useDatasets(
+  const m = useMoney()
+  // The tiles and charts come from one small file, so they show first; stock cover and the
+  // top products need every marketplace's product sales and follow (LCP, NFR).
+  const fast = useDatasets('overviewDaily')
+  const slow = useDatasetsAfter(
+    fast.status !== 'loading',
     'salesDaily',
-    'adsCampaignDaily',
-    'adsProductDaily',
+    'stockSalesDaily',
+    'inventoryDaily',
     'products',
-    'campaigns',
   )
 
   const view = useMemo(() => {
-    if (data.status !== 'ready') return null
-    const d = data.data
-    const kpis = accountKpis(d.salesDaily, d.adsCampaignDaily, filters.range)
-    const prev = filters.previous
-      ? accountKpis(d.salesDaily, d.adsCampaignDaily, filters.previous)
-      : null
-    const series = dailySeries(d.salesDaily, d.adsCampaignDaily, filters.range)
-    return {
-      kpis,
-      prev,
-      dates: series.map((p) => p.date),
-      money: [
-        { name: 'Total sales', values: series.map((p) => p.sales) },
-        { name: 'Ad spend', values: series.map((p) => p.adSpend) },
-      ],
-      ratios: [
-        { name: 'ACoS', values: series.map((p) => p.acos) },
-        { name: 'TACoS', values: series.map((p) => p.tacos) },
-      ],
-      topProducts: topBy(
-        productRows(d.salesDaily, d.adsProductDaily, d.products, filters.range),
-        (r) => r.sales,
-      ),
-      topCampaigns: topBy(
-        campaignRows(d.adsCampaignDaily, d.campaigns, filters.range),
-        (r) => r.cost,
-      ),
+    if (fast.status !== 'ready') return null
+    const o = fast.data.overviewDaily
+    const { range, previous } = filters
+    const daily = new Map(daysOf(range).map((day) => [day, 0]))
+    for (let i = 0; i < o.date.length; i++) {
+      const day = o.date[i]
+      if (daily.has(day)) daily.set(day, daily.get(day)! + o.sales[i])
     }
-  }, [data, filters.range, filters.previous])
+    return {
+      totals: overviewTotals(o, range),
+      prev: previous ? overviewTotals(o, previous) : null,
+      spark: [...daily.values()],
+      weekly: rangeLength(range) > 60,
+      chart: revenueAndSpend(o, range),
+      units: unitsByMarketplace(o, range),
+    }
+  }, [fast, filters])
 
+  const stockView = useMemo(() => {
+    if (slow.status !== 'ready') return null
+    const d = slow.data
+    const { range, previous } = filters
+    const stock = stockCover(d.inventoryDaily, d.stockSalesDaily, range.end)
+    const prevStock = previous
+      ? stockCover(d.inventoryDaily, d.stockSalesDaily, previous.end)
+      : null
+    // productRows needs ads only for its ad columns, which this table does not show
+    const noAds = {
+      date: [],
+      marketplace: [],
+      asin: [],
+      impressions: [],
+      clicks: [],
+      cost: [],
+      orders: [],
+      sales: [],
+    }
+    const top: TopRow[] = topBy(
+      productRows(d.salesDaily, noAds, d.products, range),
+      (r) => r.sales,
+    ).map((r) => ({
+      asin: r.asin,
+      title: r.title,
+      orders: r.orders,
+      revenue: r.sales,
+      cover: stock.byAsin.get(r.asin)?.daysOfCover ?? null,
+    }))
+    return {
+      cover: stock.total.daysOfCover,
+      prevCover: prevStock ? prevStock.total.daysOfCover : null,
+      top,
+    }
+  }, [slow, filters])
+
+  const data = fast.status === 'error' ? fast : slow
   if (data.status === 'error') return <ErrorBox error={data.error} />
 
-  const k = view?.kpis
+  const t = view?.totals
   const p = view?.prev
   const prev = (v: number | null | undefined) => (filters.compare ? (p ? v : null) : undefined)
+  const days = rangeLength(filters.range)
 
   return (
     <>
       <PageTitle title="Overview">
-        Sales and advertising across all products and ad types.
+        Is the business on track: sales, orders, units and stock.
       </PageTitle>
       <FilterBar
         filters={filters}
@@ -78,96 +122,85 @@ export function OverviewPage() {
         dataStart={manifest.dataStart}
         dataEnd={manifest.dataEnd}
       />
-      {!view || !k ? (
+      {!view || !t ? (
         <Loading />
       ) : (
         <>
-          <section aria-label="Key figures" className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <section aria-label="Key figures" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <KpiTile
-              label="Total sales"
-              value={moneyCompact(k.sales)}
-              current={k.sales}
-              previous={prev(p?.sales)}
+              label="Revenue"
+              value={m.moneyCompact(t.revenue)}
+              current={t.revenue}
+              previous={prev(p?.revenue)}
               better="up"
+              aside={<Sparkline values={view.spark} />}
             />
             <KpiTile
               label="Orders"
-              value={count(k.orders)}
-              current={k.orders}
+              value={count(t.orders)}
+              current={t.orders}
               previous={prev(p?.orders)}
               better="up"
             />
             <KpiTile
-              label="Units"
-              value={count(k.units)}
-              current={k.units}
+              label="Units sold"
+              value={count(t.units)}
+              current={t.units}
               previous={prev(p?.units)}
               better="up"
             />
             <KpiTile
-              label="Ad spend"
-              value={moneyCompact(k.adSpend)}
-              current={k.adSpend}
-              previous={prev(p?.adSpend)}
+              label="Days of cover"
+              value={
+                !stockView
+                  ? null
+                  : stockView.cover === null
+                    ? '–'
+                    : count(Math.round(stockView.cover))
+              }
+              current={stockView?.cover ?? null}
+              previous={stockView ? prev(stockView.prevCover) : undefined}
               better="neutral"
-            />
-            <KpiTile
-              label="Ad sales"
-              value={moneyCompact(k.adSales)}
-              current={k.adSales}
-              previous={prev(p?.adSales)}
-              better="up"
-            />
-            <KpiTile
-              label="ACoS"
-              value={pct(k.acos)}
-              current={k.acos}
-              previous={prev(p?.acos)}
-              better="down"
-              points
-              hint="Ad spend ÷ ad sales"
-            />
-            <KpiTile
-              label="TACoS"
-              value={pct(k.tacos)}
-              current={k.tacos}
-              previous={prev(p?.tacos)}
-              better="down"
-              points
-              hint="Ad spend ÷ total sales"
-            />
-            <KpiTile
-              label="ROAS"
-              value={multiple(k.roas)}
-              current={k.roas}
-              previous={prev(p?.roas)}
-              better="up"
-              hint="Ad sales ÷ ad spend"
+              hint="Stock available on the last day ÷ average units sold per day over the 30 days to it"
             />
           </section>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
             <TrendChart
-              title="Total sales and ad spend per day"
-              dates={view.dates}
-              series={view.money}
-              format={money}
+              title={view.weekly ? 'Revenue against ad spend, weekly' : 'Revenue against ad spend'}
+              dates={view.chart.map((b) => b.start)}
+              series={[
+                { name: 'Revenue', values: view.chart.map((b) => b.revenue) },
+                { name: 'Ad spend', values: view.chart.map((b) => b.adSpend) },
+              ]}
+              format={m.money}
             />
-            <TrendChart
-              title="ACoS and TACoS per day"
-              dates={view.dates}
-              series={view.ratios}
-              format={(v) => pct(v, 0)}
+            <SmallMultiples
+              title="Units by marketplace"
+              caption={`Weekly · ${days} days`}
+              kind="bars"
+              items={view.units.map((s) => ({
+                key: s.marketplace,
+                label: s.marketplace,
+                total: count(s.total),
+                values: s.values,
+                alt: `${MARKETPLACE_NAMES[s.marketplace]} units per week: ${s.buckets
+                  .map((b, i) => `${dateShort(b.start)} ${count(s.values[i])}`)
+                  .join(', ')}`,
+              }))}
+              note={`Each chart has its own scale; the figure is the ${days}-day total. Bars are whole weeks; the last is the latest.`}
             />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <DataTable<ProductRow>
-              title="Top 5 products by sales"
-              rows={view.topProducts}
+          {!stockView ? (
+            <Loading what="top products" />
+          ) : (
+            <DataTable<TopRow>
+              title="Top 5 products by revenue"
+              rows={stockView.top}
               rowKey={(r) => r.asin}
               csvName="top-products.csv"
-              initialSort={{ id: 'sales', desc: true }}
+              initialSort={{ id: 'revenue', desc: true }}
               columns={
                 [
                   {
@@ -177,70 +210,38 @@ export function OverviewPage() {
                     cell: (r) => (
                       <Link
                         className="text-accent-strong hover:underline"
-                        to={`/products/${r.asin}`}
+                        to={{ pathname: `/sales/${r.asin}`, search: location.search }}
                       >
                         {r.title.replace('Demo Brand ', '')}
                       </Link>
                     ),
                   },
                   {
-                    id: 'sales',
-                    header: 'Sales',
-                    value: (r) => r.sales,
-                    cell: (r) => money(r.sales),
+                    id: 'orders',
+                    header: 'Orders',
+                    value: (r) => r.orders,
+                    cell: (r) => count(r.orders),
                     align: 'right',
                   },
                   {
-                    id: 'units',
-                    header: 'Units',
-                    value: (r) => r.units,
-                    cell: (r) => count(r.units),
+                    id: 'revenue',
+                    header: `Revenue (${m.currency})`,
+                    value: (r) => r.revenue,
+                    cell: (r) => m.money(r.revenue),
                     align: 'right',
                   },
                   {
-                    id: 'tacos',
-                    header: 'TACoS',
-                    value: (r) => r.tacos,
-                    cell: (r) => pct(r.tacos),
+                    id: 'cover',
+                    header: 'Cover',
+                    value: (r) => r.cover,
+                    cell: (r) => cover(r.cover),
                     align: 'right',
+                    hint: 'Days of stock left at the recent rate of sales, across the chosen fulfilment networks',
                   },
-                ] satisfies Column<ProductRow>[]
+                ] satisfies Column<TopRow>[]
               }
             />
-            <DataTable<CampaignRow>
-              title="Top 5 campaigns by spend"
-              rows={view.topCampaigns}
-              rowKey={(r) => r.campaign_id}
-              csvName="top-campaigns.csv"
-              initialSort={{ id: 'cost', desc: true }}
-              columns={
-                [
-                  { id: 'name', header: 'Campaign', value: (r) => r.campaign_name },
-                  {
-                    id: 'cost',
-                    header: 'Spend',
-                    value: (r) => r.cost,
-                    cell: (r) => money(r.cost),
-                    align: 'right',
-                  },
-                  {
-                    id: 'sales',
-                    header: 'Ad sales',
-                    value: (r) => r.sales,
-                    cell: (r) => money(r.sales),
-                    align: 'right',
-                  },
-                  {
-                    id: 'acos',
-                    header: 'ACoS',
-                    value: (r) => r.acos,
-                    cell: (r) => pct(r.acos),
-                    align: 'right',
-                  },
-                ] satisfies Column<CampaignRow>[]
-              }
-            />
-          </div>
+          )}
         </>
       )}
     </>

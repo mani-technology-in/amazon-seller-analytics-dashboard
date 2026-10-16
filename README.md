@@ -1,29 +1,33 @@
 # Amazon Seller Analytics Dashboard
 
-A demo analytics dashboard for an Amazon seller, built by [Mani Technology](https://manitechnology.com). It brings sales, advertising (Sponsored Products, Sponsored Brands and Sponsored Display) and FBA inventory into one view, with metrics such as ACoS, TACoS and ROAS.
+A demo analytics dashboard for an Amazon seller selling in six marketplaces (US, Canada, Mexico, UK, Germany, France), built by [Mani Technology](https://manitechnology.com). It brings sales, advertising (Sponsored Products, Sponsored Brands and Sponsored Display), FBA inventory and profit after Amazon fees into one view, in US dollars or each marketplace's own currency, with metrics such as ACoS, TACoS, ROAS and net margin.
 
 All data is synthetic. It is generated for a fictional brand ("Demo Brand") and shaped like real Amazon SP-API and Amazon Ads v3 reports, so a real connector could replace the generator later.
 
-> **Live demo: [demo.manitechnology.com](https://demo.manitechnology.com)** (no login). Version 1 is complete; every merge to `main` deploys automatically. Read the one-page [case study](docs/case-study.md).
+> **Live demo: [demo.manitechnology.com](https://demo.manitechnology.com)** (no login). Version 1.1 redesigns it to match the Amazon section of manitechnology.com and adds Sales, Profit and Reports pages and six marketplaces; every merge to `main` deploys automatically. Read the one-page [case study](docs/case-study.md).
 
 ## Screenshots
 
-| Overview | Advertising |
+| Overview | Sales |
 | --- | --- |
-| ![Overview: KPI tiles with change against the previous period, daily sales and ad spend, ACoS and TACoS, top products and campaigns](docs/screenshots/overview.png) | ![Advertising: campaign table, keyword and target table with flags](docs/screenshots/advertising.png) |
-| **Products** | **Inventory** |
-| ![Products: sales, sessions, conversion, ad spend and TACoS per ASIN](docs/screenshots/products.png) | ![Inventory: available and inbound units, days of cover, low-stock flags](docs/screenshots/inventory.png) |
+| ![Overview: revenue, orders, units and days of cover, revenue against ad spend, units by marketplace, top products](docs/screenshots/overview.png) | ![Sales: six KPI tiles, revenue by marketplace, marketplace and product tables](docs/screenshots/sales.png) |
+| **Inventory** | **Advertising** |
+| ![Inventory: stock tiles, stock over time with stock-out days, stock by product and network](docs/screenshots/inventory.png) | ![Advertising: ad KPIs, ACoS and TACoS against the target, top campaigns, campaign and keyword tables](docs/screenshots/advertising.png) |
+| **Profit** | **Reports** |
+| ![Profit: profit tiles, the chart from revenue to net profit, product and marketplace profit](docs/screenshots/profit.png) | ![Reports: four CSV reports and the exchange rates used](docs/screenshots/reports.png) |
 
 ## Pages
 
 | Page | What it shows | Requirements |
 | --- | --- | --- |
-| Overview | 8 KPI tiles with change against the previous period; daily sales vs ad spend; daily ACoS and TACoS; top 5 products and campaigns | FR-5 to FR-7 |
-| Advertising | Campaign table; keyword and target table flagging spend with no sales and ACoS above the target; filters for ad type and campaign | FR-8 to FR-10 |
-| Products | Product table (sales, units, sessions, conversion, ad spend, TACoS) and a daily detail page per ASIN | FR-11, FR-12 |
-| Inventory | Available and inbound units, average daily units, days of cover, low-stock and out-of-stock flags | FR-13, FR-14 |
+| Overview | Revenue, orders, units sold and days of cover with change against the previous period; revenue against ad spend; units by marketplace; top 5 products | FR-5 to FR-7, FR-20 |
+| Sales | Six KPI tiles; revenue by marketplace; a marketplace table with share of revenue; the product table with each product's revenue by marketplace, and a daily detail page per ASIN | FR-11, FR-12, FR-21, FR-22 |
+| Advertising | Ad spend, ad sales, ACoS, TACoS and ROAS tiles; the ACoS and TACoS trend against the target; top 5 campaigns; campaign table with marketplace; keyword and target table flagging spend with no sales and ACoS above the target; filters for ad type and campaign | FR-8 to FR-10 |
+| Inventory | Five stock tiles; stock over time for one product and network, with stock-out days marked; one row per product per fulfilment network: available and inbound units, average daily units, days of cover, low-stock and out-of-stock flags | FR-13, FR-14 |
+| Profit | Six profit tiles; a chart from revenue to net profit, one step per cost; product and marketplace profit tables with loss flags and totals | FR-27 to FR-31 |
+| Reports | Four ready-made CSV reports for the current filters, and the exchange rates used | FR-32 |
 
-Every page shares one filter bar (date presets or a custom range, previous-period comparison, target ACoS, low-stock threshold). Filters live in the URL, so any view can be shared. Every table sorts by any column and exports to CSV.
+Every page shares one filter bar (marketplace, US dollars or the marketplace's own currency, date presets or a custom range, previous-period comparison, target ACoS, low-stock threshold). Filters live in the URL, so any view can be shared. Every table sorts by any column and exports to CSV.
 
 ## How it works
 
@@ -45,7 +49,7 @@ PostgreSQL only runs at build time, on your machine or in GitHub Actions. The li
 | `pipeline/export.py` | Writes the marts as JSON files to `web/public/data/` (git-ignored) |
 | `pipeline/sql/` | SQL scripts for the `raw`, `staging` and `marts` schemas |
 | `web/` | React + TypeScript app (Vite, Tailwind CSS), Vitest tests |
-| `web/src/data/` | `DataSource` interface and the static JSON version the demo uses |
+| `web/src/data/` | `DataSource` interface, the static JSON version the demo uses, and the selection layer that joins the chosen marketplaces and converts currency |
 | `web/src/metrics/` | Date ranges and every metric the dashboard shows, with unit and parity tests |
 | `pipeline/parity.py` | The same metrics computed in SQL, for the parity check |
 | `docs/` | Metric definitions, case study and screenshots |
@@ -71,16 +75,21 @@ The pipeline reads `DATABASE_URL` (see `.env.example`); the default matches `doc
 
 ## Tests and deployment
 
-Every push and pull request runs four GitHub Actions jobs:
+Every push and pull request runs five GitHub Actions jobs:
 
 | Job | What it checks |
 | --- | --- |
 | Pipeline | ruff, then pytest against PostgreSQL 16: repeatable data, Amazon report formats, reconciliation from raw to marts, export size |
 | Web | ESLint, Prettier, TypeScript, Vitest unit and component tests, production build |
 | Parity | Rebuilds the data and checks every dashboard metric against the same metric computed in SQL |
-| Deploy | Runs only when the three above pass. Builds data and site, runs the Playwright smoke test in Chromium, Firefox and WebKit (desktop, Android and iPhone sizes, plus an accessibility check), deploys to Cloudflare Pages, then runs the smoke test again against the deployed URL |
+| Security | gitleaks (secrets), osv-scanner (dependencies), zizmor (workflows) and Semgrep (code) |
+| Deploy | Runs only when the four above pass. Builds data and site, runs the Playwright smoke test in Chromium, Firefox and WebKit (desktop, Android and iPhone sizes, plus an accessibility check), deploys to Cloudflare Pages, then runs the smoke test again against the deployed URL |
 
-Pull requests deploy to a preview (`https://pr-<number>.<project>.pages.dev`); merges to `main` deploy the live demo at https://demo.manitechnology.com, and the smoke test runs a third time against that address. Deployment needs two repository secrets: `CLOUDFLARE_API_TOKEN` (permission: Account → Cloudflare Pages → Edit) and `CLOUDFLARE_ACCOUNT_ID`. The site is static, so hosting is free and nothing sleeps.
+Pull requests deploy to a preview (`https://pr-<number>.<project>.pages.dev`), which is then checked by **Lighthouse CI** (every page as a phone on slow 4G, median of 3 runs; LCP over 5 s, CLS over 0.1 or accessibility under 95 fails; the target for LCP is 2.5 s, and each run's figures are in the job summary; settings in `web/lighthouserc.json`) and an **OWASP ZAP baseline scan** (passive; any alert of medium risk or higher fails). Both write their results to the job summary; merges to `main` deploy the live demo at https://demo.manitechnology.com, and the smoke test runs a third time against that address. Deployment needs two repository secrets: `CLOUDFLARE_API_TOKEN` (permission: Account → Cloudflare Pages → Edit) and `CLOUDFLARE_ACCOUNT_ID`. The site is static, so hosting is free and nothing sleeps.
+
+**Analytics:** anonymous page views go to PostHog's EU cloud, with no cookies or browser storage, no session replay and nothing loaded from PostHog's servers. The project key comes from the repository variable `POSTHOG_KEY`; without it analytics is off. Automated browsers (the tests) are never counted.
+
+**Speed:** each page first downloads one small pre-totalled file (`overview_daily.json`, `profit_summary_daily.json` or `inventory_summary_daily.json`) for its tiles and charts, then the per-marketplace files its tables need; the chart library loads separately.
 
 ## Synthetic data
 
@@ -113,7 +122,7 @@ Each file is loaded into the `raw` schema unchanged (one JSON record per row, wi
 
 Product-level ad spend covers Sponsored Products and Sponsored Display only, because Amazon reports Sponsored Brands spend per campaign. Account totals include all three ad types.
 
-The export writes one compact JSON file per mart (one array per field; Amazon IDs as strings) plus `manifest.json` with the data's date range, `marketplaces.json`, `fx_monthly.json` and `profit_daily.json`. Every file covers all six marketplaces, with a marketplace (inventory: network) column and money in local currency; the dashboard filters and converts to USD itself. Until the pages with the marketplace filter arrive, the pages show the US marketplace, as in v1.0. Opening a page downloads, compressed (gzip level 6, measured with Playwright against a production build on 15 Oct 2026): Overview about 890 KB, Products 770 KB, Inventory 490 KB, Advertising 1,050 KB (code, data and fonts). The data files now hold all six marketplaces while the pages still show the US only; CR-1 PR 6 splits them so each page loads only what it shows.
+The export writes compact JSON files (one array per field; Amazon IDs as strings; money in local currency) plus `manifest.json` with the data's date range. The daily files are split so a page downloads only the marketplaces a visitor picks: `mkt/<code>/` holds one marketplace's sales, ads and profit, `net/<code>/` one fulfilment network's inventory (Germany and France share `net/EU/`), and `overview_daily.json` holds each marketplace's daily totals for the Overview. Shared files: `products.json`, `campaigns.json`, `targets.json`, `marketplaces.json`, `fx_monthly.json`. In the browser, `web/src/data/selection.ts` joins the chosen marketplaces and converts money to USD at each month's rate. Opening a page downloads, compressed (gzip level 6, measured with Playwright against a production build on 16 Oct 2026, code, data and fonts), with all six marketplaces: Overview about 690 KB, Sales 800 KB, Inventory 500 KB, Advertising 1,020 KB; with one marketplace less (Overview for the US about 500 KB).
 
 ## Metrics
 

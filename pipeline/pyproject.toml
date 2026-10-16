@@ -1,6 +1,6 @@
 [project]
 name = "asad-pipeline"
-version = "0.1.0"
+version = "1.1.0"
 description = "Synthetic Amazon seller data, PostgreSQL models and JSON export for the Amazon Seller Analytics Dashboard demo."
 readme = "../README.md"
 requires-python = ">=3.12,<3.13"
