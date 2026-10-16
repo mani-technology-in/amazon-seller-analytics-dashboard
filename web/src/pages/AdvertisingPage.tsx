@@ -22,6 +22,8 @@ import {
   type TargetRow,
 } from '../metrics/metrics'
 
+const pct0 = (v: number | null) => pct(v, 0)
+
 const MATCH_LABELS: Record<string, string> = {
   EXACT: 'Exact',
   PHRASE: 'Phrase',
@@ -69,14 +71,15 @@ export function AdvertisingPage() {
         .map((c) => c.campaign_id),
     )
     const keep = (id: string) => allowed.has(id)
-    const { range, previous } = filters
+    const range = filters.range
+    const previous = filters.previous
     return {
       kpis: adKpis(d.adsCampaignDaily, d.overviewDaily, range, keep),
       prev: previous ? adKpis(d.adsCampaignDaily, d.overviewDaily, previous, keep) : null,
       trend: adTrend(d.adsCampaignDaily, d.overviewDaily, range, keep),
       top: topBy(campaigns, (c) => c.cost),
     }
-  }, [base, campaigns, adFilter, filters])
+  }, [base, campaigns, adFilter, filters.range, filters.previous])
 
   const targets = useMemo(() => {
     if (keywords.status !== 'ready') return null
@@ -379,7 +382,18 @@ function AdSummary({
   weekly: boolean
 }) {
   const prev = (v: number | null | undefined) => (compare ? (p ? v : null) : undefined)
-  const target = pct(targetAcos, 0)
+  // stable chart inputs: a new object would rebuild the chart on every render
+  const chart = useMemo(
+    () => ({
+      dates: trend.map((t) => t.start),
+      series: [
+        { name: 'ACoS', values: trend.map((t) => t.acos) },
+        { name: 'TACoS', values: trend.map((t) => t.tacos) },
+      ],
+      reference: { value: targetAcos, label: `Target ACoS ${pct(targetAcos, 0)}` },
+    }),
+    [trend, targetAcos],
+  )
   return (
     <>
       <section
@@ -430,13 +444,10 @@ function AdSummary({
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <TrendChart
           title={weekly ? 'ACoS and TACoS, weekly' : 'ACoS and TACoS'}
-          dates={trend.map((t) => t.start)}
-          series={[
-            { name: 'ACoS', values: trend.map((t) => t.acos) },
-            { name: 'TACoS', values: trend.map((t) => t.tacos) },
-          ]}
-          format={(v) => pct(v, 0)}
-          reference={{ value: targetAcos, label: `Target ACoS ${target}` }}
+          dates={chart.dates}
+          series={chart.series}
+          format={pct0}
+          reference={chart.reference}
         />
         <section
           aria-labelledby="top-campaigns"

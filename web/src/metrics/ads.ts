@@ -5,7 +5,7 @@
 import type { AdsCampaignDaily, OverviewDaily } from '../data/types'
 import { inRange, type DateRange } from './dates'
 import { ratio } from './metrics'
-import { buckets, type Bucket } from './sales'
+import { bucketIndex, buckets, type Bucket } from './sales'
 
 export interface AdKpis {
   adSpend: number
@@ -56,8 +56,22 @@ export function adTrend(
   range: DateRange,
   keep: (campaignId: string) => boolean = () => true,
 ): AdTrendPoint[] {
-  return buckets(range).map((b) => {
-    const k = adKpis(ads, overview, b, keep)
-    return { ...b, acos: k.acos, tacos: k.tacos }
-  })
+  const bs = buckets(range)
+  const at = bucketIndex(bs)
+  const sums = bs.map(() => ({ spend: 0, adSales: 0, revenue: 0 }))
+  for (let i = 0; i < ads.date.length; i++) {
+    const k = at(ads.date[i])
+    if (k < 0 || !keep(ads.campaign_id[i])) continue
+    sums[k].spend += ads.cost[i]
+    sums[k].adSales += ads.sales[i]
+  }
+  for (let i = 0; i < overview.date.length; i++) {
+    const k = at(overview.date[i])
+    if (k >= 0) sums[k].revenue += overview.sales[i]
+  }
+  return bs.map((b, k) => ({
+    ...b,
+    acos: ratio(sums[k].spend, sums[k].adSales),
+    tacos: ratio(sums[k].spend, sums[k].revenue),
+  }))
 }

@@ -73,7 +73,7 @@ export function weeks(range: DateRange): Bucket[] {
   return out
 }
 
-function bucketIndex(bs: Bucket[]): (d: ISODate) => number {
+export function bucketIndex(bs: Bucket[]): (d: ISODate) => number {
   const index = new Map<ISODate, number>()
   bs.forEach((b, i) => {
     for (let d = b.start; d <= b.end; d = addDays(d, 1)) index.set(d, i)

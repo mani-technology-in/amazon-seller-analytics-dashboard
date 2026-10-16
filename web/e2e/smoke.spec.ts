@@ -137,6 +137,18 @@ test('Inventory: stock over time for the lowest-cover product, with a picker (FR
   await expect(chart.locator('figcaption')).toContainText('Stock over time')
 })
 
+test('a one-day stock-out is shaded on the stock chart', async ({ page }) => {
+  await page.goto('/inventory?mkt=DE&preset=custom&from=2025-12-01&to=2025-12-14')
+  await page.getByRole('combobox', { name: 'Product' }).selectOption('B01Z54AXCX')
+  await page.getByRole('combobox', { name: 'Network' }).selectOption('EU')
+  const chart = page.locator('figure')
+  await expect(chart.locator('figcaption')).toContainText('Out of stock on 1 day in this range')
+  // the band has a width: half a day either side of the stock-out day
+  const band = chart.locator('svg path[fill="#fdecee"]')
+  await expect(band).toHaveCount(1)
+  expect((await band.boundingBox())!.width).toBeGreaterThan(10)
+})
+
 test('old Products links open the Sales page, filters kept (FR-16)', async ({ page }) => {
   await page.goto('/products?preset=last7')
   await expect(page).toHaveURL(/\/sales\?preset=last7$/)

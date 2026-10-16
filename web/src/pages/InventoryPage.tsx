@@ -62,26 +62,44 @@ export function InventoryPage() {
     }
   }, [data, asOf, filters.lowStockDays])
 
-  if (data.status === 'error') return <ErrorBox error={data.error} />
+  const stock = useMemo(() => {
+    if (!view || data.status !== 'ready') return null
+    const { rows } = view
+    const coverOf = (r: InventoryRow) => (r.outOfStock ? -1 : (r.daysOfCover ?? Infinity))
+    const lowest = rows.reduce<InventoryRow | undefined>(
+      (a, r) => (!a || coverOf(r) < coverOf(a) ? r : a),
+      undefined,
+    )
+    const chosen =
+      (picked && rows.find((r) => r.asin === picked.asin && r.network === picked.network)) ||
+      (picked && rows.find((r) => r.asin === picked.asin)) ||
+      lowest
+    if (!chosen) return null
+    const series = stockSeries(data.data.inventoryDaily, chosen.asin, chosen.network, filters.range)
+    const outDays = series.outOfStock.reduce((a, b) => a + daysBetween(b.start, b.end), 0)
+    return {
+      chosen,
+      dates: series.dates,
+      series: [{ name: 'Available units', values: series.available }],
+      bands: series.outOfStock,
+      note: outDays
+        ? `Out of stock on ${outDays} day${outDays === 1 ? '' : 's'} in this range`
+        : 'In stock every day of this range',
+      reference:
+        chosen.avgDailyUnits > 0
+          ? {
+              value: chosen.avgDailyUnits * filters.lowStockDays,
+              label: `Low-stock line, ${filters.lowStockDays} days`,
+            }
+          : undefined,
+      products: [...new Map(rows.map((r) => [r.asin, r.title])).entries()].sort((a, b) =>
+        a[1].localeCompare(b[1]),
+      ),
+      networks: rows.filter((r) => r.asin === chosen.asin).map((r) => r.network),
+    }
+  }, [view, data, picked, filters.range, filters.lowStockDays])
 
-  const rows = view?.rows ?? []
-  const lowest = [...rows].sort(
-    (a, b) =>
-      (a.outOfStock ? -1 : (a.daysOfCover ?? Infinity)) -
-      (b.outOfStock ? -1 : (b.daysOfCover ?? Infinity)),
-  )[0]
-  const chosen =
-    (picked && rows.find((r) => r.asin === picked.asin && r.network === picked.network)) ||
-    (picked && rows.find((r) => r.asin === picked.asin)) ||
-    lowest
-  const chart =
-    data.status === 'ready' && chosen
-      ? stockSeries(data.data.inventoryDaily, chosen.asin, chosen.network, filters.range)
-      : null
-  const productOptions = [...new Map(rows.map((r) => [r.asin, r.title])).entries()].sort((a, b) =>
-    a[1].localeCompare(b[1]),
-  )
-  const networkOptions = rows.filter((r) => r.asin === chosen?.asin).map((r) => r.network)
+  if (data.status === 'error') return <ErrorBox error={data.error} />
 
   return (
     <>
@@ -154,22 +172,22 @@ export function InventoryPage() {
             />
           </section>
 
-          {chosen && chart ? (
+          {stock ? (
             <section aria-label="Stock over time" className="flex flex-col gap-2">
               <div className="flex flex-wrap items-end gap-3">
                 <label className="flex flex-col gap-1 text-caption font-medium text-ink-2">
                   Product
                   <select
                     className={control}
-                    value={chosen.asin}
+                    value={stock.chosen.asin}
                     onChange={(e) =>
                       setPicked({
                         asin: e.target.value,
-                        network: picked?.network ?? chosen.network,
+                        network: picked?.network ?? stock.chosen.network,
                       })
                     }
                   >
-                    {productOptions.map(([asin, title]) => (
+                    {stock.products.map(([asin, title]) => (
                       <option key={asin} value={asin}>
                         {title.replace('Demo Brand ', '')}
                       </option>
@@ -180,12 +198,12 @@ export function InventoryPage() {
                   Network
                   <select
                     className={control}
-                    value={chosen.network}
+                    value={stock.chosen.network}
                     onChange={(e) =>
-                      setPicked({ asin: chosen.asin, network: e.target.value as NetworkCode })
+                      setPicked({ asin: stock.chosen.asin, network: e.target.value as NetworkCode })
                     }
                   >
-                    {networkOptions.map((n) => (
+                    {stock.networks.map((n) => (
                       <option key={n} value={n}>
                         {NETWORK_NAMES[n]}
                       </option>
@@ -194,24 +212,13 @@ export function InventoryPage() {
                 </label>
               </div>
               <TrendChart
-                title={`Stock over time: ${chosen.title.replace('Demo Brand ', '')}, ${NETWORK_NAMES[chosen.network]}`}
-                note={
-                  chart.outOfStock.length
-                    ? `Out of stock on ${chart.outOfStock.reduce((a, b) => a + daysBetween(b.start, b.end), 0)} days in this range`
-                    : 'In stock every day of this range'
-                }
-                dates={chart.dates}
-                series={[{ name: 'Available units', values: chart.available }]}
+                title={`Stock over time: ${stock.chosen.title.replace('Demo Brand ', '')}, ${NETWORK_NAMES[stock.chosen.network]}`}
+                note={stock.note}
+                dates={stock.dates}
+                series={stock.series}
                 format={count}
-                reference={
-                  chosen.avgDailyUnits > 0
-                    ? {
-                        value: chosen.avgDailyUnits * filters.lowStockDays,
-                        label: `Low-stock line, ${filters.lowStockDays} days`,
-                      }
-                    : undefined
-                }
-                bands={chart.outOfStock}
+                reference={stock.reference}
+                bands={stock.bands}
                 bandLabel="Out of stock"
               />
             </section>

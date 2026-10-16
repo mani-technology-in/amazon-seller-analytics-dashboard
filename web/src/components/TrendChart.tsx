@@ -119,6 +119,8 @@ export function TrendChart({
       },
       yAxis: {
         type: 'value',
+        // keep the reference line in view even when every value is below it
+        max: reference ? (e: { max: number }) => Math.max(e.max, reference.value * 1.1) : undefined,
         splitLine: { lineStyle: { color: CHART.grid } },
         axisLabel: { ...CHART.label, formatter: (v: number) => format(v) },
       },
@@ -150,7 +152,11 @@ export function TrendChart({
               markArea: {
                 silent: true,
                 itemStyle: { color: CHART.band },
-                data: bands.map((b) => [{ xAxis: b.start }, { xAxis: b.end }]),
+                // half a day either side, so a one-day band has a width (boundaryGap is off)
+                data: bands.map((b) => [
+                  { xAxis: Math.max(dates.indexOf(b.start) - 0.5, 0) },
+                  { xAxis: Math.min(dates.indexOf(b.end) + 0.5, dates.length - 1) },
+                ]),
               },
             }
           : {}),

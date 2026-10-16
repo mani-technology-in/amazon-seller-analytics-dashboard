@@ -17,7 +17,7 @@ export function Sparkline({ values }: { values: number[] }) {
       height="24"
       viewBox="0 0 72 24"
       aria-hidden="true"
-      className="hidden shrink-0 sm:block"
+      className="ml-auto hidden shrink-0 sm:block"
     >
       <path
         d={d}
