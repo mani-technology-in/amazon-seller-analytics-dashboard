@@ -46,17 +46,30 @@ FILES = {
     "overview_daily.json": """
         WITH s AS (
             SELECT date, marketplace, sum(sales) AS sales, sum(orders)::int AS orders,
-                   sum(units)::int AS units
+                   sum(units)::int AS units, sum(sessions)::int AS sessions
             FROM marts.fct_sales_daily GROUP BY 1, 2
         ), a AS (
             SELECT date, marketplace, sum(cost) AS ad_spend, sum(sales) AS ad_sales
             FROM marts.fct_ads_campaign_daily GROUP BY 1, 2
         )
         SELECT date, marketplace, coalesce(s.sales, 0) AS sales, coalesce(s.orders, 0) AS orders,
-               coalesce(s.units, 0) AS units, coalesce(a.ad_spend, 0) AS ad_spend,
+               coalesce(s.units, 0) AS units, coalesce(s.sessions, 0) AS sessions,
+               coalesce(a.ad_spend, 0) AS ad_spend,
                coalesce(a.ad_sales, 0) AS ad_sales
         FROM s FULL JOIN a USING (date, marketplace)
         ORDER BY date, marketplace""",
+    # The Inventory page's first tiles: each network's stock, all products added together.
+    "inventory_summary_daily.json": """
+        SELECT date, network, sum(available)::int AS available, sum(inbound)::int AS inbound
+        FROM marts.fct_inventory_daily GROUP BY 1, 2 ORDER BY 1, 2""",
+    # The Profit page's tiles and chart: every marketplace's daily finances, all products
+    # added together (product cost to 6 decimals: a year's total moves by under a cent).
+    "profit_summary_daily.json": """
+        SELECT date, marketplace, sum(units_shipped)::int AS units_shipped,
+               sum(principal) AS principal, sum(refunds) AS refunds,
+               sum(referral_fees) AS referral_fees, sum(fba_fees) AS fba_fees,
+               round(sum(product_cost), 6) AS product_cost
+        FROM marts.fct_profit_daily GROUP BY 1, 2 ORDER BY 1, 2""",
 }
 
 # Fact files written once per marketplace (mkt/<code>/) or fulfilment network (net/<code>/),

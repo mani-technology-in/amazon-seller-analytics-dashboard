@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { useDatasets } from '../app/useDatasets'
+import { useDatasets, useDatasetsAfter } from '../app/useDatasets'
 import { useFilters } from '../app/filters'
 import { DataTable, type Column } from '../components/DataTable'
 import { KpiTile } from '../components/KpiTile'
@@ -38,7 +38,13 @@ export function AdvertisingPage() {
   const { filters, update } = useFilters(manifest.dataStart, manifest.dataEnd)
   const { money, moneyCents } = useMoney()
   const base = useDatasets('adsCampaignDaily', 'campaigns', 'overviewDaily')
-  const keywords = useDatasets('adsTargetDaily', 'targets', 'campaigns')
+  // the keyword file is the biggest; it loads after the campaigns have shown
+  const keywords = useDatasetsAfter(
+    base.status !== 'loading',
+    'adsTargetDaily',
+    'targets',
+    'campaigns',
+  )
   const [flaggedOnly, setFlaggedOnly] = useState(false)
 
   const adFilter = useMemo(

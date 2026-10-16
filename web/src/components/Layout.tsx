@@ -1,5 +1,6 @@
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { trackPageView } from '../app/analytics'
 import { useDatasets } from '../app/useDatasets'
 import { useReduceMotion } from '../app/motion'
 import { dateLong } from '../lib/format'
@@ -24,8 +25,10 @@ const BUILT_BY = (
 /** Page frame: side navigation with the store and data date, and the content area (FR-4, FR-16, FR-19). */
 export function Layout() {
   const manifest = useDatasets('manifest')
-  const { search } = useLocation()
+  const { search, pathname } = useLocation()
   const reduced = useReduceMotion()
+  // one anonymous page view per page (filters changing in the URL are not new views)
+  useEffect(() => trackPageView(pathname), [pathname])
   const brand = manifest.status === 'ready' ? manifest.data.manifest.brand : 'Demo Brand'
   const initials = brand
     .split(/\s+/)

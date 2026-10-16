@@ -1,18 +1,20 @@
 # Amazon Seller Analytics Dashboard
 
-A demo analytics dashboard for an Amazon seller, built by [Mani Technology](https://manitechnology.com). It brings sales, advertising (Sponsored Products, Sponsored Brands and Sponsored Display) and FBA inventory into one view, with metrics such as ACoS, TACoS and ROAS.
+A demo analytics dashboard for an Amazon seller selling in six marketplaces (US, Canada, Mexico, UK, Germany, France), built by [Mani Technology](https://manitechnology.com). It brings sales, advertising (Sponsored Products, Sponsored Brands and Sponsored Display), FBA inventory and profit after Amazon fees into one view, in US dollars or each marketplace's own currency, with metrics such as ACoS, TACoS, ROAS and net margin.
 
 All data is synthetic. It is generated for a fictional brand ("Demo Brand") and shaped like real Amazon SP-API and Amazon Ads v3 reports, so a real connector could replace the generator later.
 
-> **Live demo: [demo.manitechnology.com](https://demo.manitechnology.com)** (no login). Version 1 is complete; every merge to `main` deploys automatically. Read the one-page [case study](docs/case-study.md).
+> **Live demo: [demo.manitechnology.com](https://demo.manitechnology.com)** (no login). Version 1.1 redesigns it to match the Amazon section of manitechnology.com and adds Sales, Profit and Reports pages and six marketplaces; every merge to `main` deploys automatically. Read the one-page [case study](docs/case-study.md).
 
 ## Screenshots
 
-| Overview | Advertising |
+| Overview | Sales |
 | --- | --- |
-| ![Overview: KPI tiles with change against the previous period, daily sales and ad spend, ACoS and TACoS, top products and campaigns](docs/screenshots/overview.png) | ![Advertising: campaign table, keyword and target table with flags](docs/screenshots/advertising.png) |
-| **Products** | **Inventory** |
-| ![Products: sales, sessions, conversion, ad spend and TACoS per ASIN](docs/screenshots/products.png) | ![Inventory: available and inbound units, days of cover, low-stock flags](docs/screenshots/inventory.png) |
+| ![Overview: revenue, orders, units and days of cover, revenue against ad spend, units by marketplace, top products](docs/screenshots/overview.png) | ![Sales: six KPI tiles, revenue by marketplace, marketplace and product tables](docs/screenshots/sales.png) |
+| **Inventory** | **Advertising** |
+| ![Inventory: stock tiles, stock over time with stock-out days, stock by product and network](docs/screenshots/inventory.png) | ![Advertising: ad KPIs, ACoS and TACoS against the target, top campaigns, campaign and keyword tables](docs/screenshots/advertising.png) |
+| **Profit** | **Reports** |
+| ![Profit: profit tiles, the chart from revenue to net profit, product and marketplace profit](docs/screenshots/profit.png) | ![Reports: four CSV reports and the exchange rates used](docs/screenshots/reports.png) |
 
 ## Pages
 
@@ -73,16 +75,21 @@ The pipeline reads `DATABASE_URL` (see `.env.example`); the default matches `doc
 
 ## Tests and deployment
 
-Every push and pull request runs four GitHub Actions jobs:
+Every push and pull request runs five GitHub Actions jobs:
 
 | Job | What it checks |
 | --- | --- |
 | Pipeline | ruff, then pytest against PostgreSQL 16: repeatable data, Amazon report formats, reconciliation from raw to marts, export size |
 | Web | ESLint, Prettier, TypeScript, Vitest unit and component tests, production build |
 | Parity | Rebuilds the data and checks every dashboard metric against the same metric computed in SQL |
-| Deploy | Runs only when the three above pass. Builds data and site, runs the Playwright smoke test in Chromium, Firefox and WebKit (desktop, Android and iPhone sizes, plus an accessibility check), deploys to Cloudflare Pages, then runs the smoke test again against the deployed URL |
+| Security | gitleaks (secrets), osv-scanner (dependencies), zizmor (workflows) and Semgrep (code) |
+| Deploy | Runs only when the four above pass. Builds data and site, runs the Playwright smoke test in Chromium, Firefox and WebKit (desktop, Android and iPhone sizes, plus an accessibility check), deploys to Cloudflare Pages, then runs the smoke test again against the deployed URL |
 
-Pull requests deploy to a preview (`https://pr-<number>.<project>.pages.dev`); merges to `main` deploy the live demo at https://demo.manitechnology.com, and the smoke test runs a third time against that address. Deployment needs two repository secrets: `CLOUDFLARE_API_TOKEN` (permission: Account → Cloudflare Pages → Edit) and `CLOUDFLARE_ACCOUNT_ID`. The site is static, so hosting is free and nothing sleeps.
+Pull requests deploy to a preview (`https://pr-<number>.<project>.pages.dev`), which is then checked by **Lighthouse CI** (every page as a phone on slow 4G, median of 3 runs; LCP over 3.5 s, CLS over 0.1 or accessibility under 95 fails, target LCP 2.5 s; settings in `web/lighthouserc.json`) and an **OWASP ZAP baseline scan** (passive; any alert of medium risk or higher fails). Both write their results to the job summary; merges to `main` deploy the live demo at https://demo.manitechnology.com, and the smoke test runs a third time against that address. Deployment needs two repository secrets: `CLOUDFLARE_API_TOKEN` (permission: Account → Cloudflare Pages → Edit) and `CLOUDFLARE_ACCOUNT_ID`. The site is static, so hosting is free and nothing sleeps.
+
+**Analytics:** anonymous page views go to PostHog's EU cloud, with no cookies or browser storage, no session replay and nothing loaded from PostHog's servers. The project key comes from the repository variable `POSTHOG_KEY`; without it analytics is off. Automated browsers (the tests) are never counted.
+
+**Speed:** each page first downloads one small pre-totalled file (`overview_daily.json`, `profit_summary_daily.json` or `inventory_summary_daily.json`) for its tiles and charts, then the per-marketplace files its tables need; the chart library loads separately.
 
 ## Synthetic data
 

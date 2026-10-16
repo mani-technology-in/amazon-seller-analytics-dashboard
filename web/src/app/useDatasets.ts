@@ -27,6 +27,17 @@ type Datasets = {
  * downloaded once, so pages that share files do not download them twice.
  */
 export function useDatasets<K extends keyof Source>(...keys: K[]): Loaded<Pick<Datasets, K>> {
+  return useDatasetsAfter(true, ...keys)
+}
+
+/**
+ * As useDatasets, but starts downloading only once `ready` is true: a page asks for its small
+ * files first and its big ones after, so the first figures are not slowed by the rest.
+ */
+export function useDatasetsAfter<K extends keyof Source>(
+  ready: boolean,
+  ...keys: K[]
+): Loaded<Pick<Datasets, K>> {
   const ds = useDataSource()
   const id = keys.join(',')
   // The result remembers which data it belongs to: after a new choice of marketplace the page
@@ -38,6 +49,7 @@ export function useDatasets<K extends keyof Source>(...keys: K[]): Loaded<Pick<D
   } | null>(null)
 
   useEffect(() => {
+    if (!ready) return
     let live = true
     const names = id.split(',') as K[]
     Promise.all(names.map((k) => ds[k]()))
@@ -50,7 +62,25 @@ export function useDatasets<K extends keyof Source>(...keys: K[]): Loaded<Pick<D
     return () => {
       live = false
     }
-  }, [ds, id])
+  }, [ds, id, ready])
 
   return state && state.ds === ds && state.id === id ? state.loaded : { status: 'loading' }
+}
+
+/**
+ * True once the page's text has drawn in its web font. Pages with only big files wait for it
+ * before downloading them, so the font is not slowed down by data (a late font swap is a late
+ * LCP).
+ */
+export function useFontsReady(): boolean {
+  const [ready, setReady] = useState(() => typeof document === 'undefined' || !document.fonts)
+  useEffect(() => {
+    if (ready) return
+    let live = true
+    void document.fonts.ready.then(() => live && setReady(true))
+    return () => {
+      live = false
+    }
+  }, [ready])
+  return ready
 }

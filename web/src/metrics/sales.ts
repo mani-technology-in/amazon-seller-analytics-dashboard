@@ -17,18 +17,20 @@ export interface SalesTotals {
   revenue: number
   orders: number
   units: number
+  sessions: number
   adSpend: number
   adSales: number
 }
 
 /** Account totals from the pre-totalled overview file. */
 export function overviewTotals(o: OverviewDaily, range: DateRange): SalesTotals {
-  const t = { revenue: 0, orders: 0, units: 0, adSpend: 0, adSales: 0 }
+  const t = { revenue: 0, orders: 0, units: 0, sessions: 0, adSpend: 0, adSales: 0 }
   for (let i = 0; i < o.date.length; i++) {
     if (!inRange(o.date[i], range)) continue
     t.revenue += o.sales[i]
     t.orders += o.orders[i]
     t.units += o.units[i]
+    t.sessions += o.sessions[i]
     t.adSpend += o.ad_spend[i]
     t.adSales += o.ad_sales[i]
   }
@@ -152,6 +154,19 @@ export interface SalesKpis {
   sessions: number
   aov: number | null
   unitSessionPct: number | null
+}
+
+/** Sales page tiles (FR-21) from the small pre-totalled overview file. */
+export function salesKpisFromOverview(o: OverviewDaily, range: DateRange): SalesKpis {
+  const t = overviewTotals(o, range)
+  return {
+    revenue: t.revenue,
+    orders: t.orders,
+    units: t.units,
+    sessions: t.sessions,
+    aov: ratio(t.revenue, t.orders),
+    unitSessionPct: ratio(t.units, t.sessions),
+  }
 }
 
 /** Sales page tiles (FR-21). */

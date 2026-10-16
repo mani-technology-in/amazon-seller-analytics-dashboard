@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useFilters } from '../app/filters'
 import { useMoney } from '../app/money'
-import { useDatasets } from '../app/useDatasets'
+import { useDatasets, useDatasetsAfter } from '../app/useDatasets'
 import { DataTable, type Column } from '../components/DataTable'
 import { FilterBar } from '../components/FilterBar'
 import { Flag } from '../components/Flag'
@@ -14,7 +14,7 @@ import { count, pct, type MoneyFormat } from '../lib/format'
 import { rangeLength } from '../metrics/dates'
 import { MARKETPLACE_NAMES } from '../metrics/marketplace'
 import {
-  accountProfit,
+  accountProfitFromSummary,
   marketplaceProfitRows,
   productProfitRows,
   profitTotals,
@@ -85,26 +85,43 @@ export function ProfitPage() {
   const manifest = useOutletContext<Manifest>()
   const { filters, update } = useFilters(manifest.dataStart, manifest.dataEnd)
   const m = useMoney()
-  const data = useDatasets('profitDaily', 'adsProductDaily', 'adsCampaignDaily', 'products')
+  // Tiles and the chart come from two small pre-totalled files and show first; the tables need
+  // every product's finances and follow.
+  const fast = useDatasets('profitSummaryDaily', 'overviewDaily')
+  const slow = useDatasetsAfter(
+    fast.status !== 'loading',
+    'profitDaily',
+    'adsProductDaily',
+    'products',
+  )
 
   const view = useMemo(() => {
-    if (data.status !== 'ready') return null
-    const d = data.data
+    if (fast.status !== 'ready') return null
+    const { profitSummaryDaily: p, overviewDaily: o } = fast.data
     const { range, previous } = filters
-    const account = accountProfit(d.profitDaily, d.adsCampaignDaily, range)
-    const products = productProfitRows(d.profitDaily, d.adsProductDaily, d.products, range)
-    const markets = marketplaceProfitRows(d.profitDaily, d.adsProductDaily, range)
+    const account = accountProfitFromSummary(p, o, range)
     return {
       account,
-      prev: previous ? accountProfit(d.profitDaily, d.adsCampaignDaily, previous) : null,
+      prev: previous ? accountProfitFromSummary(p, o, previous) : null,
       steps: account.revenue > 0 ? profitWaterfall(account) : [],
+    }
+  }, [fast, filters])
+
+  const tables = useMemo(() => {
+    if (slow.status !== 'ready') return null
+    const d = slow.data
+    const products = productProfitRows(d.profitDaily, d.adsProductDaily, d.products, filters.range)
+    const markets = marketplaceProfitRows(d.profitDaily, d.adsProductDaily, filters.range)
+    return {
       products,
       productTotal: profitTotals(products),
       markets,
       marketTotal: profitTotals(markets),
-      losers: products.filter((p) => p.losesMoney).length,
+      losers: products.filter((x) => x.losesMoney).length,
     }
-  }, [data, filters])
+  }, [slow, filters.range])
+
+  const data = fast.status === 'error' ? fast : slow
 
   const productCols = useMemo<Column<ProductProfitRow>[]>(
     () => [
@@ -202,7 +219,7 @@ export function ProfitPage() {
               previous={prev(p?.productCost)}
               better="neutral"
               hint={COST_NOTE}
-              aside={<span className="text-caption text-ink-3">{COST_NOTE}</span>}
+              note={COST_NOTE}
             />
             <KpiTile
               label="Net profit"
@@ -261,33 +278,39 @@ export function ProfitPage() {
             </p>
           </section>
 
-          <DataTable<ProductProfitRow>
-            title="Profit by product"
-            description={
-              view.losers
-                ? `${view.losers} product${view.losers === 1 ? ' loses' : 's lose'} money in this range. Product cost is entered by the seller, not from Amazon. Ad spend here leaves out Sponsored Brands.`
-                : 'Product cost is entered by the seller, not from Amazon. Ad spend here leaves out Sponsored Brands, which Amazon reports per campaign.'
-            }
-            rows={view.products}
-            rowKey={(r) => r.asin}
-            csvName="product-profit.csv"
-            initialSort={{ id: 'netProfit', desc: true }}
-            columns={productCols}
-            footer={view.productTotal as ProductProfitRow}
-            emptyText="No sales, so no profit to show."
-          />
+          {!tables ? (
+            <Loading what="profit tables" />
+          ) : (
+            <>
+              <DataTable<ProductProfitRow>
+                title="Profit by product"
+                description={
+                  tables.losers
+                    ? `${tables.losers} product${tables.losers === 1 ? ' loses' : 's lose'} money in this range. Product cost is entered by the seller, not from Amazon. Ad spend here leaves out Sponsored Brands.`
+                    : 'Product cost is entered by the seller, not from Amazon. Ad spend here leaves out Sponsored Brands, which Amazon reports per campaign.'
+                }
+                rows={tables.products}
+                rowKey={(r) => r.asin}
+                csvName="product-profit.csv"
+                initialSort={{ id: 'netProfit', desc: true }}
+                columns={productCols}
+                footer={tables.productTotal as ProductProfitRow}
+                emptyText="No sales, so no profit to show."
+              />
 
-          <DataTable<MarketplaceProfitRow>
-            title="Profit by marketplace"
-            description="Ads run in the US, the UK and Germany only, so their margins are lower. Product cost is entered by the seller, not from Amazon. Ad spend here leaves out Sponsored Brands."
-            rows={view.markets}
-            rowKey={(r) => r.marketplace}
-            csvName="marketplace-profit.csv"
-            initialSort={{ id: 'revenue', desc: true }}
-            columns={marketCols}
-            footer={view.marketTotal as MarketplaceProfitRow}
-            emptyText="No sales, so no profit to show."
-          />
+              <DataTable<MarketplaceProfitRow>
+                title="Profit by marketplace"
+                description="Ads run in the US, the UK and Germany only, so their margins are lower. Product cost is entered by the seller, not from Amazon. Ad spend here leaves out Sponsored Brands."
+                rows={tables.markets}
+                rowKey={(r) => r.marketplace}
+                csvName="marketplace-profit.csv"
+                initialSort={{ id: 'revenue', desc: true }}
+                columns={marketCols}
+                footer={tables.marketTotal as MarketplaceProfitRow}
+                emptyText="No sales, so no profit to show."
+              />
+            </>
+          )}
         </>
       )}
     </>

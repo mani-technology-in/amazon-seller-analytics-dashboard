@@ -203,6 +203,29 @@ test('Reports: each report downloads a CSV with its row count, and says so (FR-3
   ).toBeDisabled()
 })
 
+test('one anonymous page view per page goes to PostHog EU, with no cookies or storage (D4)', async ({
+  page,
+}) => {
+  test.skip(!process.env.VITE_POSTHOG_KEY, 'this build has no PostHog key, so analytics is off')
+  const events: string[] = []
+  // answer for PostHog, so tests never count as visits
+  await page.route('https://eu.i.posthog.com/**', async (route) => {
+    events.push(route.request().url())
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":1}' })
+  })
+  // analytics stays off in automated browsers; pretend to be a person for this test
+  await page.addInitScript(() =>
+    Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => false }),
+  )
+  await page.goto('/')
+  await expect.poll(() => events.length, { timeout: 15_000 }).toBeGreaterThan(0)
+  expect(events.every((u) => u.startsWith('https://eu.i.posthog.com/'))).toBe(true)
+  expect(await page.context().cookies()).toEqual([])
+  expect(
+    await page.evaluate(() => Object.keys(localStorage).filter((k) => /ph_|posthog/i.test(k))),
+  ).toEqual([])
+})
+
 test('old Products links open the Sales page, filters kept (FR-16)', async ({ page }) => {
   await page.goto('/products?preset=last7')
   await expect(page).toHaveURL(/\/sales\?preset=last7$/)

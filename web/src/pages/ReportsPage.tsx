@@ -2,9 +2,9 @@ import { useCallback, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useFilters } from '../app/filters'
 import { useMoney } from '../app/money'
-import { useDatasets } from '../app/useDatasets'
+import { useDatasetsAfter, useFontsReady } from '../app/useDatasets'
 import { FilterBar } from '../components/FilterBar'
-import { ErrorBox, Loading, PageTitle } from '../components/Layout'
+import { ErrorBox, PageTitle } from '../components/Layout'
 import { Toast, type ToastMessage } from '../components/Toast'
 import type { Manifest } from '../data/types'
 import { downloadCsv, toCsv } from '../lib/csv'
@@ -39,7 +39,8 @@ interface Report {
   id: string
   title: string
   description: string
-  rows: number
+  /** null while the data loads */
+  rows: number | null
   build: () => string
 }
 
@@ -49,7 +50,9 @@ export function ReportsPage() {
   const m = useMoney()
   const [toast, setToast] = useState<ToastMessage | null>(null)
   const closeToast = useCallback(() => setToast(null), [])
-  const data = useDatasets(
+  const fontsReady = useFontsReady()
+  const data = useDatasetsAfter(
+    fontsReady,
     'salesDaily',
     'profitDaily',
     'adsProductDaily',
@@ -63,55 +66,58 @@ export function ReportsPage() {
   )
 
   const view = useMemo(() => {
-    if (data.status !== 'ready') return null
-    const d = data.data
+    const d = data.status === 'ready' ? data.data : null
     const { range } = filters
     const cur = m.currency
-    const sales = salesByMarketplaceDay(d.salesDaily, range)
-    const profit = productProfitRows(d.profitDaily, d.adsProductDaily, d.products, range).sort(
-      (a, b) => b.netProfit - a.netProfit,
-    )
-    const stock = inventoryRows(
-      d.inventoryDaily,
-      d.stockSalesDaily,
-      d.products,
-      range.end,
-      filters.lowStockDays,
-      new Map(d.marketplaces.map((x) => [x.marketplace, x.network])),
-    ).sort((a, b) => a.network.localeCompare(b.network) || a.title.localeCompare(b.title))
-    const campaigns = campaignRows(d.adsCampaignDaily, d.campaigns, range).sort(
-      (a, b) => b.cost - a.cost,
-    )
+    const sales = d ? salesByMarketplaceDay(d.salesDaily, range) : null
+    const profit = d
+      ? productProfitRows(d.profitDaily, d.adsProductDaily, d.products, range).sort(
+          (a, b) => b.netProfit - a.netProfit,
+        )
+      : null
+    const stock = d
+      ? inventoryRows(
+          d.inventoryDaily,
+          d.stockSalesDaily,
+          d.products,
+          range.end,
+          filters.lowStockDays,
+          new Map(d.marketplaces.map((x) => [x.marketplace, x.network])),
+        ).sort((a, b) => a.network.localeCompare(b.network) || a.title.localeCompare(b.title))
+      : null
+    const campaigns = d
+      ? campaignRows(d.adsCampaignDaily, d.campaigns, range).sort((a, b) => b.cost - a.cost)
+      : null
     const reports: Report[] = [
       {
         id: 'sales-by-marketplace-by-day',
         title: 'Sales by marketplace by day',
         description: 'Revenue, orders, units and sessions for each marketplace on each day.',
-        rows: sales.length,
-        build: () => toCsv(sales, salesDayColumns(cur)),
+        rows: sales ? sales.length : null,
+        build: () => toCsv(sales ?? [], salesDayColumns(cur)),
       },
       {
         id: 'product-profit',
         title: 'Product profit',
         description:
           'Revenue, refunds, Amazon fees, ad spend, product cost (entered by the seller, not from Amazon) and net profit for each product.',
-        rows: profit.length,
-        build: () => toCsv(profit, productProfitColumns(cur)),
+        rows: profit ? profit.length : null,
+        build: () => toCsv(profit ?? [], productProfitColumns(cur)),
       },
       {
         id: 'inventory-by-network',
         title: 'Inventory by network',
         description: `Available and inbound units, daily sales and days of cover for each product in each fulfilment network, on ${dateLong(range.end)}.`,
-        rows: stock.length,
-        build: () => toCsv(stock, inventoryColumns),
+        rows: stock ? stock.length : null,
+        build: () => toCsv(stock ?? [], inventoryColumns),
       },
       {
         id: 'campaign-performance',
         title: 'Campaign performance',
         description:
           'Spend, sales, ACoS, ROAS, clicks and orders for each campaign in each marketplace.',
-        rows: campaigns.length,
-        build: () => toCsv(campaigns, campaignColumns(cur)),
+        rows: campaigns ? campaigns.length : null,
+        build: () => toCsv(campaigns ?? [], campaignColumns(cur)),
       },
     ]
     // exchange rates for the months in the range, newest first
@@ -122,7 +128,7 @@ export function ReportsPage() {
       d0 = mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, '0')}`
     }
     const rates = new Map<string, number>()
-    for (let i = 0; i < d.fxMonthly.year_month.length; i++) {
+    for (let i = 0; d && i < d.fxMonthly.year_month.length; i++) {
       rates.set(`${d.fxMonthly.year_month[i]} ${d.fxMonthly.currency[i]}`, d.fxMonthly.usd_rate[i])
     }
     const fx = [...months].reverse().map((ym) => ({
@@ -130,7 +136,7 @@ export function ReportsPage() {
       label: `${MONTHS[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`,
       rates: FX_CURRENCIES.map((c) => rates.get(`${ym} ${c}`) ?? null),
     }))
-    return { reports, fx }
+    return { reports, fx, fxReady: d !== null }
   }, [data, filters, m.currency])
 
   if (data.status === 'error') return <ErrorBox error={data.error} />
@@ -150,51 +156,57 @@ export function ReportsPage() {
         dataEnd={manifest.dataEnd}
         showCompare={false}
       />
-      {!view ? (
-        <Loading />
-      ) : (
-        <>
-          <ul className="overflow-hidden rounded-lg border border-surface-sunken bg-surface-page">
-            {view.reports.map((r) => (
-              <li
-                key={r.id}
-                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-7 gap-y-2 border-t border-surface-sunken px-4 py-4 first:border-t-0 md:grid-cols-[minmax(0,1fr)_auto_auto] md:px-5"
-              >
-                <div>
-                  <h2 className="text-section-title text-ink">{r.title}</h2>
-                  <p className="mt-1 max-w-[620px] text-small text-ink-2">{r.description}</p>
-                </div>
+      <>
+        <ul className="overflow-hidden rounded-lg border border-surface-sunken bg-surface-page">
+          {view.reports.map((r) => (
+            <li
+              key={r.id}
+              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-7 gap-y-2 border-t border-surface-sunken px-4 py-4 first:border-t-0 md:grid-cols-[minmax(0,1fr)_auto_auto] md:px-5"
+            >
+              <div>
+                <h2 className="text-section-title text-ink">{r.title}</h2>
+                <p className="mt-1 max-w-[620px] text-small text-ink-2">{r.description}</p>
+              </div>
+              {r.rows === null ? (
+                <span
+                  role="status"
+                  aria-label={`Counting the rows of ${r.title}`}
+                  className="h-4 w-16 animate-pulse rounded-sm bg-skeleton [animation-duration:var(--duration-pulse)]"
+                />
+              ) : (
                 <span className="font-mono text-table-number whitespace-nowrap text-ink-2 tabular-nums">
                   {count(r.rows)} rows
                 </span>
-                <button
-                  type="button"
-                  disabled={!r.rows}
-                  title={r.rows ? undefined : 'No rows for these filters'}
-                  onClick={() => {
-                    downloadCsv(`${r.id}-${suffix}.csv`, r.build())
-                    setToast({
-                      id: Date.now(),
-                      text: `${r.title} downloaded, ${count(r.rows)} rows.`,
-                    })
-                  }}
-                  className="col-span-2 inline-flex h-10 items-center justify-center gap-2 rounded-md bg-accent-strong px-3.5 text-body font-semibold text-surface-page transition-transform duration-(--duration-press) ease-out hover:bg-accent-strong-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-surface-sunken disabled:text-ink-disabled md:col-span-1"
-                >
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                    <path
-                      d="M7 2v7m0 0 3-3M7 9 4 6M2.5 11.5h9"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  {r.rows ? 'Download CSV' : 'No rows for these filters'}
-                </button>
-              </li>
-            ))}
-          </ul>
+              )}
+              <button
+                type="button"
+                disabled={!r.rows}
+                title={r.rows === 0 ? 'No rows for these filters' : undefined}
+                onClick={() => {
+                  downloadCsv(`${r.id}-${suffix}.csv`, r.build())
+                  setToast({
+                    id: Date.now(),
+                    text: `${r.title} downloaded, ${count(r.rows)} rows.`,
+                  })
+                }}
+                className="col-span-2 inline-flex h-10 items-center justify-center gap-2 rounded-md bg-accent-strong px-3.5 text-body font-semibold text-surface-page transition-transform duration-(--duration-press) ease-out hover:bg-accent-strong-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-surface-sunken disabled:text-ink-disabled md:col-span-1"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <path
+                    d="M7 2v7m0 0 3-3M7 9 4 6M2.5 11.5h9"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                {r.rows === 0 ? 'No rows for these filters' : 'Download CSV'}
+              </button>
+            </li>
+          ))}
+        </ul>
 
+        {view.fxReady ? (
           <section
             aria-labelledby="fx-h"
             className="overflow-x-auto rounded-lg border border-surface-sunken bg-surface-page"
@@ -238,8 +250,8 @@ export function ReportsPage() {
               </tbody>
             </table>
           </section>
-        </>
-      )}
+        ) : null}
+      </>
       <Toast message={toast} onClose={closeToast} />
     </>
   )

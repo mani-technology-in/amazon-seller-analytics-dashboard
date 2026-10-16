@@ -19,6 +19,7 @@ const overview: OverviewDaily = {
   sales: [100, 40, 60, 20, 999],
   orders: [4, 2, 3, 1, 9],
   units: [5, 2, 3, 1, 9],
+  sessions: [50, 20, 30, 10, 90],
   ad_spend: [10, 4, 6, 0, 99],
   ad_sales: [30, 8, 12, 0, 99],
 }
@@ -30,6 +31,7 @@ describe('overview (FR-5, FR-6, FR-20)', () => {
       revenue: 220,
       orders: 10,
       units: 11,
+      sessions: 110,
       adSpend: 20,
       adSales: 50,
     })

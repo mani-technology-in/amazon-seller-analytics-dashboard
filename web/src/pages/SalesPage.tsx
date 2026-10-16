@@ -2,7 +2,7 @@ import { useId, useMemo, useState } from 'react'
 import { Link, useOutletContext, useParams } from 'react-router-dom'
 import { useFilters } from '../app/filters'
 import { useMoney } from '../app/money'
-import { useDatasets } from '../app/useDatasets'
+import { useDatasets, useDatasetsAfter } from '../app/useDatasets'
 import { DataTable, type Column } from '../components/DataTable'
 import { FilterBar } from '../components/FilterBar'
 import { KpiTile } from '../components/KpiTile'
@@ -14,7 +14,11 @@ import { count, dateLong, pct } from '../lib/format'
 import { percentChange, rangeLength } from '../metrics/dates'
 import { MARKETPLACE_NAMES, marketplaceShares, type MarketplaceShare } from '../metrics/marketplace'
 import { dailySeries, productRows, type ProductRow } from '../metrics/metrics'
-import { productMarketplaceRevenue, revenueByMarketplace, salesKpis } from '../metrics/sales'
+import {
+  productMarketplaceRevenue,
+  revenueByMarketplace,
+  salesKpisFromOverview,
+} from '../metrics/sales'
 
 const SB_NOTE =
   'Sponsored Products and Sponsored Display only: Amazon reports Sponsored Brands spend per campaign, not per product.'
@@ -91,31 +95,45 @@ export function SalesPage() {
   const manifest = useOutletContext<Manifest>()
   const { filters, update } = useFilters(manifest.dataStart, manifest.dataEnd)
   const m = useMoney()
-  const data = useDatasets('overviewDaily', 'salesDaily', 'adsProductDaily', 'products')
+  // Tiles, chart and marketplace table come from one small file and show first; the product
+  // table needs every marketplace's product sales and follows.
+  const fast = useDatasets('overviewDaily')
+  const slow = useDatasetsAfter(
+    fast.status !== 'loading',
+    'salesDaily',
+    'adsProductDaily',
+    'products',
+  )
 
   const view = useMemo(() => {
-    if (data.status !== 'ready') return null
-    const d = data.data
+    if (fast.status !== 'ready') return null
+    const o = fast.data.overviewDaily
     const { range, previous } = filters
-    const split = productMarketplaceRevenue(d.salesDaily, range)
     const prevShares = previous
-      ? new Map(marketplaceShares(d.salesDaily, previous).map((r) => [r.marketplace, r.revenue]))
+      ? new Map(marketplaceShares(o, previous).map((r) => [r.marketplace, r.revenue]))
       : null
     return {
-      kpis: salesKpis(d.salesDaily, range),
-      prev: previous ? salesKpis(d.salesDaily, previous) : null,
-      revenue: revenueByMarketplace(d.overviewDaily, range),
-      markets: marketplaceShares(d.salesDaily, range).map((r) => ({
+      kpis: salesKpisFromOverview(o, range),
+      prev: previous ? salesKpisFromOverview(o, previous) : null,
+      revenue: revenueByMarketplace(o, range),
+      markets: marketplaceShares(o, range).map((r) => ({
         ...r,
         change: prevShares ? percentChange(r.revenue, prevShares.get(r.marketplace) ?? 0) : null,
       })),
-      products: productRows(d.salesDaily, d.adsProductDaily, d.products, range).map((r) => ({
-        ...r,
-        split: filters.marketplace === 'all' ? (split.get(r.asin) ?? []) : [],
-      })),
     }
-  }, [data, filters])
+  }, [fast, filters])
 
+  const products = useMemo(() => {
+    if (slow.status !== 'ready') return null
+    const d = slow.data
+    const split = productMarketplaceRevenue(d.salesDaily, filters.range)
+    return productRows(d.salesDaily, d.adsProductDaily, d.products, filters.range).map((r) => ({
+      ...r,
+      split: filters.marketplace === 'all' ? (split.get(r.asin) ?? []) : [],
+    }))
+  }, [slow, filters.range, filters.marketplace])
+
+  const data = fast.status === 'error' ? fast : slow
   if (data.status === 'error') return <ErrorBox error={data.error} />
 
   const k = view?.kpis
@@ -270,68 +288,72 @@ export function SalesPage() {
             }
           />
 
-          <DataTable<SalesProductRow>
-            title="Products"
-            rows={view.products}
-            rowKey={(r) => r.asin}
-            csvName="products.csv"
-            initialSort={{ id: 'sales', desc: true }}
-            columns={
-              [
-                {
-                  id: 'title',
-                  header: 'Product',
-                  value: (r) => r.title,
-                  cell: (r) => <ProductName row={r} money={m.money} />,
-                },
-                {
-                  id: 'units',
-                  header: 'Units',
-                  value: (r) => r.units,
-                  cell: (r) => count(r.units),
-                  align: 'right',
-                },
-                {
-                  id: 'sales',
-                  header: `Revenue (${cur})`,
-                  value: (r) => r.sales,
-                  cell: (r) => m.money(r.sales),
-                  align: 'right',
-                },
-                {
-                  id: 'sessions',
-                  header: 'Sessions',
-                  value: (r) => r.sessions,
-                  cell: (r) => count(r.sessions),
-                  align: 'right',
-                },
-                {
-                  id: 'usp',
-                  header: 'Unit session %',
-                  value: (r) => r.unitSessionPct,
-                  cell: (r) => pct(r.unitSessionPct),
-                  align: 'right',
-                  hint: 'Units ordered ÷ sessions',
-                },
-                {
-                  id: 'adSpend',
-                  header: `Ad spend (${cur})`,
-                  value: (r) => r.adSpend,
-                  cell: (r) => m.money(r.adSpend),
-                  align: 'right',
-                  hint: SB_NOTE,
-                },
-                {
-                  id: 'tacos',
-                  header: 'TACoS',
-                  value: (r) => r.tacos,
-                  cell: (r) => pct(r.tacos),
-                  align: 'right',
-                  hint: `Ad spend ÷ revenue. ${SB_NOTE}`,
-                },
-              ] satisfies Column<SalesProductRow>[]
-            }
-          />
+          {!products ? (
+            <Loading what="products" />
+          ) : (
+            <DataTable<SalesProductRow>
+              title="Products"
+              rows={products}
+              rowKey={(r) => r.asin}
+              csvName="products.csv"
+              initialSort={{ id: 'sales', desc: true }}
+              columns={
+                [
+                  {
+                    id: 'title',
+                    header: 'Product',
+                    value: (r) => r.title,
+                    cell: (r) => <ProductName row={r} money={m.money} />,
+                  },
+                  {
+                    id: 'units',
+                    header: 'Units',
+                    value: (r) => r.units,
+                    cell: (r) => count(r.units),
+                    align: 'right',
+                  },
+                  {
+                    id: 'sales',
+                    header: `Revenue (${cur})`,
+                    value: (r) => r.sales,
+                    cell: (r) => m.money(r.sales),
+                    align: 'right',
+                  },
+                  {
+                    id: 'sessions',
+                    header: 'Sessions',
+                    value: (r) => r.sessions,
+                    cell: (r) => count(r.sessions),
+                    align: 'right',
+                  },
+                  {
+                    id: 'usp',
+                    header: 'Unit session %',
+                    value: (r) => r.unitSessionPct,
+                    cell: (r) => pct(r.unitSessionPct),
+                    align: 'right',
+                    hint: 'Units ordered ÷ sessions',
+                  },
+                  {
+                    id: 'adSpend',
+                    header: `Ad spend (${cur})`,
+                    value: (r) => r.adSpend,
+                    cell: (r) => m.money(r.adSpend),
+                    align: 'right',
+                    hint: SB_NOTE,
+                  },
+                  {
+                    id: 'tacos',
+                    header: 'TACoS',
+                    value: (r) => r.tacos,
+                    cell: (r) => pct(r.tacos),
+                    align: 'right',
+                    hint: `Ad spend ÷ revenue. ${SB_NOTE}`,
+                  },
+                ] satisfies Column<SalesProductRow>[]
+              }
+            />
+          )}
         </>
       )}
     </>

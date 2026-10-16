@@ -7,6 +7,10 @@
     <meta name="color-scheme" content="light" />
     <meta name="theme-color" content="#ffffff" />
     <title>Amazon Seller Analytics Dashboard · Demo</title>
+    <!-- Every page needs the manifest first, and most open on the small overview file: fetch
+         both while the app's code downloads, not after it. -->
+    <link rel="preload" href="/data/manifest.json" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="/data/overview_daily.json" as="fetch" crossorigin="anonymous" />
   </head>
   <body>
     <div id="root"></div>

@@ -6,7 +6,8 @@ type Direction = 'up' | 'down' | 'neutral'
 
 interface KpiTileProps {
   label: string
-  value: string
+  /** null while its data loads: the tile shows a placeholder bar */
+  value: string | null
   current: number | null
   previous: number | null | undefined
   /** which way is good; neutral for spend, where more is not better or worse by itself */
@@ -16,6 +17,8 @@ interface KpiTileProps {
   points?: boolean
   /** shown at the right of the change line, e.g. a small trend line */
   aside?: ReactNode
+  /** a short line under everything, e.g. where a figure comes from */
+  note?: string
 }
 
 /** A KPI with its change against the previous period of equal length (FR-2, FR-5). */
@@ -28,6 +31,7 @@ export function KpiTile({
   hint,
   points,
   aside,
+  note,
 }: KpiTileProps) {
   const raw =
     previous === undefined
@@ -53,9 +57,17 @@ export function KpiTile({
   return (
     <div className="rounded-lg bg-surface-page/94 px-4 py-3.5 shadow-tile" title={hint}>
       <div className="text-small text-ink-3">{label}</div>
-      <div className="mt-1.5 w-fit bg-(image:--gradient-brand) bg-clip-text text-kpi-number-phone text-transparent tabular-nums md:text-kpi-number">
-        {value}
-      </div>
+      {value === null ? (
+        <div
+          role="status"
+          aria-label={`Loading ${label.toLowerCase()}`}
+          className="mt-1.5 h-[26px] w-20 animate-pulse rounded-sm bg-skeleton [animation-duration:var(--duration-pulse)]"
+        />
+      ) : (
+        <div className="mt-1.5 w-fit bg-(image:--gradient-brand) bg-clip-text text-kpi-number-phone text-transparent tabular-nums md:text-kpi-number">
+          {value}
+        </div>
+      )}
       {change === undefined && !aside ? null : (
         <div className="mt-2 flex min-h-6 items-center justify-between gap-2">
           {change === undefined ? null : (
@@ -77,6 +89,7 @@ export function KpiTile({
           {aside}
         </div>
       )}
+      {note ? <div className="mt-1 text-caption text-ink-3">{note}</div> : null}
     </div>
   )
 }

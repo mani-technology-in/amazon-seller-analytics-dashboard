@@ -9,6 +9,9 @@ import {
 import { useMemo, useState, type ReactNode } from 'react'
 import { downloadCsv, toCsv } from '../lib/csv'
 
+/** Rows drawn before "Show all". */
+export const ROW_LIMIT = 100
+
 export interface Column<T> {
   id: string
   header: string
@@ -53,6 +56,9 @@ export function DataTable<T>({
   description,
 }: DataTableProps<T>) {
   const [sorting, setSorting] = useState<SortingState>(initialSort ? [initialSort] : [])
+  // Long tables draw their first rows and the rest on request: drawing hundreds of rows at once
+  // blocks the page (TBT). Sorting and the CSV always cover every row.
+  const [showAll, setShowAll] = useState(false)
 
   const defs = useMemo<ColumnDef<T>[]>(
     () =>
@@ -172,7 +178,7 @@ export function DataTable<T>({
                 </td>
               </tr>
             ) : (
-              ordered.map((r) => (
+              (showAll ? ordered : ordered.slice(0, ROW_LIMIT)).map((r) => (
                 <tr key={r.id} className="border-t border-surface-sunken hover:bg-surface-hover">
                   {r.getVisibleCells().map((c) => {
                     const meta = c.column.columnDef.meta as Column<T>
@@ -189,6 +195,25 @@ export function DataTable<T>({
               ))
             )}
           </tbody>
+          {!showAll && ordered.length > ROW_LIMIT ? (
+            <tbody>
+              <tr className="border-t border-surface-sunken">
+                <td colSpan={columns.length} className="px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAll(true)}
+                    className="inline-flex min-h-9 items-center rounded-md px-2 text-small font-semibold text-accent-strong hover:bg-surface-hover"
+                  >
+                    Show all {ordered.length} rows
+                  </button>
+                  <span className="text-caption text-ink-3">
+                    {' '}
+                    (showing the first {ROW_LIMIT}; Download CSV has every row)
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          ) : null}
           {footer && ordered.length ? (
             <tfoot className="sticky bottom-0 bg-surface-side font-semibold">
               <tr className="border-t border-line">

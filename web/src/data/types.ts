@@ -140,6 +140,18 @@ export interface OverviewDaily {
   sales: number[]
   orders: number[]
   units: number[]
+  sessions: number[]
   ad_spend: number[]
   ad_sales: number[]
 }
+
+/** Daily stock per fulfilment network, all products added together. */
+export interface InventorySummaryDaily {
+  date: ISODate[]
+  network: NetworkCode[]
+  available: number[]
+  inbound: number[]
+}
+
+/** Daily finances per marketplace, all products added together, local currency. */
+export type ProfitSummaryDaily = Omit<ProfitDaily, 'asin'>

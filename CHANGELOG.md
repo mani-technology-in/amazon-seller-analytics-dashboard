@@ -8,6 +8,9 @@ Version 1.1 (change request CR-1): a redesign to match the Amazon section of man
 
 ### Added
 
+- Lighthouse CI on every preview (all six pages as a phone on slow 4G, median of 3 runs; LCP, CLS, accessibility and best-practices budgets fail the check, TBT warns) and an OWASP ZAP baseline scan that fails on any medium-risk alert. Both summarise their results on the run.
+- Anonymous page views with PostHog EU (no cookies or storage, no session replay, no external scripts), off without the `POSTHOG_KEY` variable and in automated browsers.
+- New README screenshots of all six pages.
 - Profit page (FR-27 to FR-31): Revenue, Amazon fees, Ad spend, Product cost, Net profit and Net margin tiles; the revenue-to-profit chart, which builds left to right, each cost dropping out of revenue 110 ms apart and ending on the net-profit bar (the signature moment; off with Reduce motion; a loss shows below the baseline in red); product and marketplace profit tables with loss flags and a totals row. Product cost is labelled as entered by the seller wherever it shows.
 - Reports page (FR-32): four ready-made reports for the current filters (sales by marketplace by day, product profit, inventory by network, campaign performance), each with its row count and a Download CSV button that confirms with a toast; and the exchange rates used. Money columns name their currency.
 - The navigation now lists all six pages in the website's order.
@@ -36,6 +39,7 @@ Version 1.1 (change request CR-1): a redesign to match the Amazon section of man
 
 ### Fixed
 
+- Faster first view on phones (Lighthouse, slow 4G): pages draw their tiles and charts from small pre-totalled files (`overview_daily.json`, now with sessions; new `profit_summary_daily.json` and `inventory_summary_daily.json`) before downloading the bigger files their tables need; the chart library loads on its own; the text font, the manifest and the overview file are preloaded; long tables draw their first 100 rows until "Show all". LCP on the Overview went from about 5.9 s to about 2.5 s.
 - Firefox smoke tests sometimes timed out on a test's first page load (#26). CI traces showed the page loading fully in under 2 seconds while Firefox's page-ready signal never reached the test; an A/B run pinned it on the Cross-Origin-Opener-Policy header (3 failures in 136 runs with it, none in 136 without). The header is removed; it is not in the MT security header list. CI now keeps and summarises the traces of any failed smoke-test attempt.
 - Browser tests no longer wait for the page's load event, which Firefox can hold for over 30 seconds while fonts and data arrive, and ignore font downloads cancelled by the test moving on (#26).
 - Production deploys failed their last check since the Content-Security-Policy arrived: Cloudflare Web Analytics adds its beacon script to demo.manitechnology.com, and the policy blocked it. The policy now allows that one script and its reporting address.

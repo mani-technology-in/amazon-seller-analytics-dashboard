@@ -5,12 +5,14 @@ import type {
   Campaign,
   FxMonthly,
   InventoryDaily,
+  InventorySummaryDaily,
   Manifest,
   Marketplace,
   MarketplaceCode,
   NetworkCode,
   OverviewDaily,
   Product,
+  ProfitSummaryDaily,
   ProfitDaily,
   SalesDaily,
   Target,
@@ -30,6 +32,8 @@ export interface DataSource {
   marketplaces(): Promise<Marketplace[]>
   fxMonthly(): Promise<FxMonthly>
   overviewDaily(): Promise<OverviewDaily>
+  profitSummaryDaily(): Promise<ProfitSummaryDaily>
+  inventorySummaryDaily(): Promise<InventorySummaryDaily>
   salesDaily(m: MarketplaceCode): Promise<SalesDaily>
   adsCampaignDaily(m: MarketplaceCode): Promise<AdsCampaignDaily>
   adsProductDaily(m: MarketplaceCode): Promise<AdsProductDaily>
@@ -81,6 +85,8 @@ export class StaticJsonDataSource implements DataSource {
   marketplaces = () => this.load<Marketplace[]>('marketplaces.json')
   fxMonthly = () => this.load<FxMonthly>('fx_monthly.json')
   overviewDaily = () => this.load<OverviewDaily>('overview_daily.json')
+  profitSummaryDaily = () => this.load<ProfitSummaryDaily>('profit_summary_daily.json')
+  inventorySummaryDaily = () => this.load<InventorySummaryDaily>('inventory_summary_daily.json')
   salesDaily = (m: MarketplaceCode) => this.load<SalesDaily>(`mkt/${m}/sales_daily.json`)
   adsCampaignDaily = (m: MarketplaceCode) =>
     this.load<AdsCampaignDaily>(`mkt/${m}/ads_campaign_daily.json`)

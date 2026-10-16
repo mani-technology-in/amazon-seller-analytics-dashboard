@@ -12,11 +12,13 @@ import type {
   Campaign,
   FxMonthly,
   InventoryDaily,
+  InventorySummaryDaily,
   Manifest,
   Marketplace,
   MarketplaceCode,
   OverviewDaily,
   Product,
+  ProfitSummaryDaily,
   ProfitDaily,
   SalesDaily,
   Target,
@@ -30,6 +32,9 @@ export interface Datasets {
   campaigns(): Promise<Campaign[]>
   targets(): Promise<Target[]>
   overviewDaily(): Promise<OverviewDaily>
+  profitSummaryDaily(): Promise<ProfitSummaryDaily>
+  /** stock of the chosen marketplaces' fulfilment networks, all products together */
+  inventorySummaryDaily(): Promise<InventorySummaryDaily>
   salesDaily(): Promise<SalesDaily>
   adsCampaignDaily(): Promise<AdsCampaignDaily>
   adsProductDaily(): Promise<AdsProductDaily>
@@ -94,6 +99,13 @@ export function selectData(source: DataSource, selection: Selection): Datasets {
     }
     return toUsd(file, money, await rates())
   }
+  /** The rows of a file covering every marketplace that belong to the chosen ones. */
+  const chosenRows = <T extends { marketplace: readonly MarketplaceCode[] }>(all: T): T => {
+    const keep = all.marketplace.map((m) => wanted.has(m))
+    return Object.fromEntries(
+      Object.entries(all).map(([k, col]) => [k, (col as unknown[]).filter((_, i) => keep[i])]),
+    ) as unknown as T
+  }
   const each = <T extends object>(get: (m: MarketplaceCode) => Promise<T>): Promise<T> =>
     Promise.all(codes.map(get)).then((files) => concatColumns<T>(files))
 
@@ -107,6 +119,15 @@ export function selectData(source: DataSource, selection: Selection): Datasets {
     ),
     targets: once('targets', async () =>
       (await source.targets()).filter((t) => wanted.has(t.marketplace)),
+    ),
+    profitSummaryDaily: once('profitSummaryDaily', async () =>
+      inCurrency(chosenRows(await source.profitSummaryDaily()), [
+        'principal',
+        'refunds',
+        'referral_fees',
+        'fba_fees',
+        'product_cost',
+      ]),
     ),
     overviewDaily: once('overviewDaily', async () => {
       const all = await source.overviewDaily()
@@ -149,6 +170,18 @@ export function selectData(source: DataSource, selection: Selection): Datasets {
         ),
       ]
       return concatColumns(await Promise.all(networks.map((n) => source.inventoryDaily(n))))
+    }),
+    inventorySummaryDaily: once('inventorySummaryDaily', async () => {
+      const networks = new Set(
+        (await source.marketplaces())
+          .filter((m) => wanted.has(m.marketplace))
+          .map((m) => m.network),
+      )
+      const all = await source.inventorySummaryDaily()
+      const keep = all.network.map((n) => networks.has(n))
+      return Object.fromEntries(
+        Object.entries(all).map(([k, col]) => [k, (col as unknown[]).filter((_, i) => keep[i])]),
+      ) as unknown as InventorySummaryDaily
     }),
     stockSalesDaily: once('stockSalesDaily', async () => {
       const markets = await source.marketplaces()
