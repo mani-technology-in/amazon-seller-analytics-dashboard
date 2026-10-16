@@ -4,7 +4,7 @@ import { expect, test } from './fixtures.ts'
 
 const PAGES = [
   { path: '/', name: 'Overview' },
-  { path: '/products', name: 'Products' },
+  { path: '/sales', name: 'Sales' },
   { path: '/inventory', name: 'Inventory' },
   { path: '/advertising', name: 'Advertising' },
 ]
@@ -96,8 +96,8 @@ test('page changes cross-fade, except with Reduce motion on', async ({ page }) =
   const count = () =>
     page.evaluate(() => (window as unknown as { transitions: number }).transitions)
 
-  await nav.getByRole('link', { name: 'Products' }).click()
-  await expect(page.getByRole('heading', { level: 1, name: 'Products' })).toBeVisible()
+  await nav.getByRole('link', { name: 'Sales' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Sales' })).toBeVisible()
   expect(await count()).toBe(1)
 
   await page.getByRole('switch', { name: 'Reduce motion' }).click()

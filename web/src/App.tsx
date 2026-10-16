@@ -1,9 +1,12 @@
 import { lazy } from 'react'
 import {
+  Navigate,
   Route,
   RouterProvider,
   createBrowserRouter,
   createRoutesFromElements,
+  useLocation,
+  useParams,
 } from 'react-router-dom'
 import { DataSourceProvider } from './app/data'
 import { Layout, PageLoadError, PageTitle } from './components/Layout'
@@ -16,12 +19,17 @@ const OverviewPage = lazy(() =>
 const AdvertisingPage = lazy(() =>
   import('./pages/AdvertisingPage').then((m) => ({ default: m.AdvertisingPage })),
 )
-const ProductsPage = lazy(() =>
-  import('./pages/ProductsPage').then((m) => ({ default: m.ProductsPage })),
-)
+const SalesPage = lazy(() => import('./pages/SalesPage').then((m) => ({ default: m.SalesPage })))
 const ProductDetailPage = lazy(() =>
-  import('./pages/ProductsPage').then((m) => ({ default: m.ProductDetailPage })),
+  import('./pages/SalesPage').then((m) => ({ default: m.ProductDetailPage })),
 )
+
+/** v1.0 Products links open the matching Sales view, filters kept (FR-16). */
+function ProductsRedirect() {
+  const { asin } = useParams()
+  const { search } = useLocation()
+  return <Navigate replace to={{ pathname: asin ? `/sales/${asin}` : '/sales', search }} />
+}
 const InventoryPage = lazy(() =>
   import('./pages/InventoryPage').then((m) => ({ default: m.InventoryPage })),
 )
@@ -31,9 +39,11 @@ const router = createBrowserRouter(
   createRoutesFromElements(
     <Route element={<Layout />} errorElement={<PageLoadError />}>
       <Route index element={<OverviewPage />} />
+      <Route path="sales" element={<SalesPage />} />
+      <Route path="sales/:asin" element={<ProductDetailPage />} />
+      <Route path="products" element={<ProductsRedirect />} />
+      <Route path="products/:asin" element={<ProductsRedirect />} />
       <Route path="advertising" element={<AdvertisingPage />} />
-      <Route path="products" element={<ProductsPage />} />
-      <Route path="products/:asin" element={<ProductDetailPage />} />
       <Route path="inventory" element={<InventoryPage />} />
       <Route path="*" element={<PageTitle title="Page not found" />} />
     </Route>,

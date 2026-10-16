@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseFilters } from './filters'
+import { displayCurrency, parseFilters, selectionFromParams } from './filters'
 
 const START = '2025-10-01'
 const END = '2026-09-30'
@@ -64,5 +64,27 @@ describe('filters from the URL (FR-1, FR-9)', () => {
       expect(f.range).toEqual({ start: '2026-09-01', end: END })
       expect(f.rangeAdjusted).toBe('outside')
     }
+  })
+
+  it('marketplace and currency (FR-17, FR-18): all marketplaces in USD unless the URL says', () => {
+    expect(parse('')).toMatchObject({ marketplace: 'all', currency: 'usd' })
+    expect(parse('mkt=UK&cur=local')).toMatchObject({ marketplace: 'UK', currency: 'local' })
+    expect(displayCurrency(parse('mkt=UK&cur=local'))).toBe('GBP')
+    expect(displayCurrency(parse('mkt=FR&cur=local'))).toBe('EUR')
+    expect(displayCurrency(parse('mkt=UK'))).toBe('USD')
+    // local currency needs one marketplace; unknown codes mean all marketplaces
+    expect(parse('cur=local')).toMatchObject({ marketplace: 'all', currency: 'usd' })
+    expect(parse('mkt=JP&cur=local')).toMatchObject({ marketplace: 'all', currency: 'usd' })
+  })
+
+  it('the data layer loads the chosen marketplaces', () => {
+    expect(selectionFromParams(new URLSearchParams(''))).toEqual({
+      marketplaces: ['US', 'CA', 'MX', 'UK', 'DE', 'FR'],
+      currency: 'usd',
+    })
+    expect(selectionFromParams(new URLSearchParams('mkt=MX&cur=local'))).toEqual({
+      marketplaces: ['MX'],
+      currency: 'local',
+    })
   })
 })

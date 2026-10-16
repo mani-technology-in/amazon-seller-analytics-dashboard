@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
-import { StaticJsonDataSource, marketplaceView, type DataSource } from '../data/dataSource'
-import { DataSourceContext } from './dataContext'
+import { StaticJsonDataSource, type DataSource } from '../data/dataSource'
+import { selectData, type Datasets, type Selection } from '../data/selection'
+import { DataSourceContext, type SelectData } from './dataContext'
 
 export function DataSourceProvider({
   source,
@@ -9,9 +10,20 @@ export function DataSourceProvider({
   source?: DataSource
   children: ReactNode
 }) {
-  // The v1.0 pages show the US marketplace until the marketplace filter arrives (CR-1 PR 6).
-  const [ds] = useState<DataSource>(
-    () => source ?? marketplaceView(new StaticJsonDataSource(), 'US'),
-  )
-  return <DataSourceContext.Provider value={ds}>{children}</DataSourceContext.Provider>
+  // One data source for the visit (it keeps each downloaded file), and one view of it per
+  // choice of marketplaces and currency, so switching back and forth downloads nothing again.
+  const [select] = useState<SelectData>(() => {
+    const ds = source ?? new StaticJsonDataSource()
+    const views = new Map<string, Datasets>()
+    return (sel: Selection): Datasets => {
+      const key = `${sel.marketplaces.join(',')}|${sel.currency}`
+      let v = views.get(key)
+      if (!v) {
+        v = selectData(ds, sel)
+        views.set(key, v)
+      }
+      return v
+    }
+  })
+  return <DataSourceContext.Provider value={select}>{children}</DataSourceContext.Provider>
 }
