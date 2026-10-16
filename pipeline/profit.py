@@ -36,12 +36,19 @@ ads AS (
     GROUP BY a.asin
 )
 SELECT
-    money.*,
+    asin,
+    coalesce(money.units, 0) AS units,
+    coalesce(money.revenue, 0) AS revenue,
+    coalesce(money.refunds, 0) AS refunds,
+    coalesce(money.referral_fees, 0) AS referral_fees,
+    coalesce(money.fba_fees, 0) AS fba_fees,
+    coalesce(money.product_cost, 0) AS product_cost,
     coalesce(ads.ad_spend, 0) AS ad_spend,
-    money.revenue - money.refunds - money.referral_fees - money.fba_fees
-        - coalesce(ads.ad_spend, 0) - money.product_cost AS net_profit
-FROM money LEFT JOIN ads USING (asin)
-ORDER BY money.asin
+    coalesce(money.revenue, 0) - coalesce(money.refunds, 0) - coalesce(money.referral_fees, 0)
+        - coalesce(money.fba_fees, 0) - coalesce(ads.ad_spend, 0)
+        - coalesce(money.product_cost, 0) AS net_profit
+FROM money FULL JOIN ads USING (asin)  -- a product can have ad spend and no sales that day
+ORDER BY asin
 """
 
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { StaticJsonDataSource } from './dataSource'
+import { StaticJsonDataSource, marketplaceView } from './dataSource'
 
 function fakeFetch(files: Record<string, unknown>) {
   return vi.fn(async (url: string) => {
@@ -31,11 +31,35 @@ describe('StaticJsonDataSource', () => {
     expect(fetch).toHaveBeenCalledTimes(2)
   })
 
-  it('refuses data with an unknown schema version', async () => {
+  it('refuses data with another schema version (1.0 files have no marketplace column)', async () => {
     const ds = new StaticJsonDataSource(
       '/data/',
-      fakeFetch({ 'manifest.json': { schemaVersion: 2 } }),
+      fakeFetch({ 'manifest.json': { schemaVersion: 1 } }),
     )
-    await expect(ds.manifest()).rejects.toThrow('Unsupported data schema version 2')
+    await expect(ds.manifest()).rejects.toThrow('Unsupported data schema version 1')
+  })
+
+  it('a marketplace view shows one marketplace in every file', async () => {
+    const files = {
+      'marketplaces.json': [
+        { marketplace: 'US', network: 'US' },
+        { marketplace: 'DE', network: 'EU' },
+        { marketplace: 'FR', network: 'EU' },
+      ],
+      'campaigns.json': [
+        { campaign_id: '1', marketplace: 'US' },
+        { campaign_id: '2', marketplace: 'DE' },
+      ],
+      'sales_daily.json': {
+        date: ['d', 'd', 'd'],
+        marketplace: ['US', 'DE', 'FR'],
+        sales: [1, 2, 3],
+      },
+      'inventory_daily.json': { date: ['d', 'd'], network: ['US', 'EU'], available: [5, 6] },
+    }
+    const de = marketplaceView(new StaticJsonDataSource('/data/', fakeFetch(files)), 'DE')
+    expect((await de.campaigns()).map((c) => c.campaign_id)).toEqual(['2'])
+    expect((await de.salesDaily()).sales).toEqual([2])
+    expect((await de.inventoryDaily()).available).toEqual([6]) // Germany sells from the EU pool
   })
 })

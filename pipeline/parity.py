@@ -6,8 +6,9 @@ The web app computes the same metrics in TypeScript from the exported JSON files
 test (web/src/metrics/parity.test.ts) checks both give the same numbers, so every figure on the
 dashboard traces back to the database. Definitions: docs/metric-definitions.md.
 
-Until the dashboard shows every marketplace (CR-1), it reads the US marketplace only, so the
-parity queries do too.
+The v1.0 metrics (account, campaigns, keywords, products, inventory) are checked on the US
+marketplace, which the v1.0 pages show. The CR-1 metrics are checked across all marketplaces in
+USD: each marketplace's share of revenue, and product and account profit (pipeline/profit.py).
 """
 
 import argparse
@@ -17,6 +18,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from db import connect
+from profit import PRODUCT_PROFIT_USD
 
 # Fixed ranges that cover the interesting parts of the data.
 RANGES = {
@@ -26,6 +28,7 @@ RANGES = {
     "april_stockout": ("2026-04-01", "2026-04-30"),
     "launch_window": ("2026-03-10", "2026-03-20"),
     "full_year": ("2025-10-01", "2026-09-30"),
+    "first_day": ("2025-10-01", "2025-10-01"),  # some products have ad spend but no sales
 }
 TARGET_ACOS = 0.30
 LOW_STOCK_DAYS = 21
@@ -136,6 +139,73 @@ WHERE i.network = 'US' AND i.date = %(as_of)s
 """
 
 
+MARKETPLACE_SHARES_SQL = """
+WITH usd AS (
+    SELECT s.marketplace, s.sales * fx.usd_rate AS revenue, s.orders, s.units
+    FROM marts.fct_sales_daily s
+    JOIN marts.dim_fx_monthly fx
+      ON fx.year_month = to_char(s.date, 'YYYY-MM') AND fx.currency = s.currency
+    WHERE s.date BETWEEN %(start)s AND %(end)s
+)
+SELECT marketplace AS key, sum(revenue) AS revenue, sum(orders) AS orders, sum(units) AS units,
+       sum(revenue) / nullif(sum(orders), 0) AS aov,
+       sum(revenue) / nullif(sum(sum(revenue)) OVER (), 0) AS share
+FROM usd GROUP BY marketplace
+"""
+
+# Product profit keyed by ASIN (pipeline/profit.py), and the account's profit, which also
+# counts Sponsored Brands spend (reported per campaign only).
+PRODUCT_PROFIT_SQL = f"SELECT asin AS key, p.* FROM ({PRODUCT_PROFIT_USD}) p"
+
+MARKETPLACE_PROFIT_SQL = """
+WITH fx AS (SELECT year_month, currency, usd_rate FROM marts.dim_fx_monthly),
+money AS (
+    SELECT f.marketplace, sum(f.units_shipped) AS units, sum(f.principal * fx.usd_rate) AS revenue,
+           sum((f.refunds + f.referral_fees + f.fba_fees + f.product_cost) * fx.usd_rate) AS costs
+    FROM marts.fct_profit_daily f
+    JOIN fx ON fx.year_month = to_char(f.date, 'YYYY-MM') AND fx.currency = f.currency
+    WHERE f.date BETWEEN %(start)s AND %(end)s
+    GROUP BY f.marketplace
+),
+ads AS (
+    SELECT a.marketplace, sum(a.cost * fx.usd_rate) AS ad_spend
+    FROM marts.fct_ads_product_daily a
+    JOIN marts.dim_marketplace m USING (marketplace)
+    JOIN fx ON fx.year_month = to_char(a.date, 'YYYY-MM') AND fx.currency = m.currency
+    WHERE a.date BETWEEN %(start)s AND %(end)s
+    GROUP BY a.marketplace
+)
+SELECT marketplace AS key, coalesce(units, 0) AS units, coalesce(revenue, 0) AS revenue,
+       coalesce(ad_spend, 0) AS ad_spend,
+       coalesce(revenue, 0) - coalesce(costs, 0) - coalesce(ad_spend, 0) AS net_profit
+FROM money FULL JOIN ads USING (marketplace)
+"""
+
+ACCOUNT_PROFIT_SQL = """
+WITH fx AS (SELECT year_month, currency, usd_rate FROM marts.dim_fx_monthly),
+money AS (
+    SELECT sum(f.units_shipped) AS units, sum(f.principal * fx.usd_rate) AS revenue,
+           sum(f.refunds * fx.usd_rate) AS refunds,
+           sum(f.referral_fees * fx.usd_rate) AS referral_fees,
+           sum(f.fba_fees * fx.usd_rate) AS fba_fees,
+           sum(f.product_cost * fx.usd_rate) AS product_cost
+    FROM marts.fct_profit_daily f
+    JOIN fx ON fx.year_month = to_char(f.date, 'YYYY-MM') AND fx.currency = f.currency
+    WHERE f.date BETWEEN %(start)s AND %(end)s
+),
+ads AS (
+    SELECT coalesce(sum(a.cost * fx.usd_rate), 0) AS ad_spend
+    FROM marts.fct_ads_campaign_daily a
+    JOIN marts.dim_marketplace m USING (marketplace)
+    JOIN fx ON fx.year_month = to_char(a.date, 'YYYY-MM') AND fx.currency = m.currency
+    WHERE a.date BETWEEN %(start)s AND %(end)s
+)
+SELECT money.*, ads.ad_spend,
+       revenue - refunds - referral_fees - fba_fees - ad_spend - product_cost AS net_profit
+FROM money, ads
+"""
+
+
 def _json(v):
     if isinstance(v, Decimal):
         return float(v)
@@ -184,6 +254,10 @@ def compute() -> dict:
                     "campaigns": _rows(cur, CAMPAIGNS_SQL, p),
                     "targets": _rows(cur, TARGETS_SQL, p),
                     "products": _rows(cur, PRODUCTS_SQL, p),
+                    "marketplaces": _rows(cur, MARKETPLACE_SHARES_SQL, p),
+                    "productProfit": _rows(cur, PRODUCT_PROFIT_SQL, p),
+                    "marketplaceProfit": _rows(cur, MARKETPLACE_PROFIT_SQL, p),
+                    "accountProfit": _one(cur, ACCOUNT_PROFIT_SQL, p),
                 }
             )
         inventory = _rows(

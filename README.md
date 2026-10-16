@@ -113,11 +113,11 @@ Each file is loaded into the `raw` schema unchanged (one JSON record per row, wi
 
 Product-level ad spend covers Sponsored Products and Sponsored Display only, because Amazon reports Sponsored Brands spend per campaign. Account totals include all three ad types.
 
-The export writes one compact JSON file per mart (one array per field; Amazon IDs as strings) plus `manifest.json` with the data's date range, `marketplaces.json` and `fx_monthly.json`. Until the new screens arrive, the v1.0 files hold US data only, so the live dashboard is unchanged. Opening a page downloads about 230–550 KB compressed (code plus that page's data), measured with Playwright against a production build; the Advertising page is the largest because of the daily keyword data.
+The export writes one compact JSON file per mart (one array per field; Amazon IDs as strings) plus `manifest.json` with the data's date range, `marketplaces.json`, `fx_monthly.json` and `profit_daily.json`. Every file covers all six marketplaces, with a marketplace (inventory: network) column and money in local currency; the dashboard filters and converts to USD itself. Until the pages with the marketplace filter arrive, the pages show the US marketplace, as in v1.0. Opening a page downloads, compressed (gzip level 6, measured with Playwright against a production build on 15 Oct 2026): Overview about 890 KB, Products 770 KB, Inventory 490 KB, Advertising 1,050 KB (code, data and fonts). The data files now hold all six marketplaces while the pages still show the US only; CR-1 PR 6 splits them so each page loads only what it shows.
 
 ## Metrics
 
-See [docs/metric-definitions.md](docs/metric-definitions.md). Every metric is computed twice: in TypeScript for the dashboard (`web/src/metrics/metrics.ts`) and in SQL (`pipeline/parity.py`). CI checks they agree for every campaign, keyword, product and inventory row over six fixed date ranges, so every number on screen traces back to the database.
+See [docs/metric-definitions.md](docs/metric-definitions.md). Every metric is computed twice: in TypeScript for the dashboard (`web/src/metrics/metrics.ts`) and in SQL (`pipeline/parity.py`). CI checks they agree for every campaign, keyword, product and inventory row, every marketplace's share of revenue, and every product's and the account's profit, over six fixed date ranges, so every number on screen traces back to the database.
 
 ## Licence
 

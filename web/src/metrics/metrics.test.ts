@@ -34,16 +34,17 @@ const products: Product[] = [
 ]
 const sales: SalesDaily = {
   date: ['2026-01-01', '2026-01-01', '2026-01-02', '2026-01-03'],
+  marketplace: ['US', 'US', 'US', 'US'],
   asin: ['A1', 'A2', 'A1', 'A1'],
   units: [3, 2, 1, 4],
   orders: [3, 1, 1, 4],
   sales: [60, 20, 20, 80],
   sessions: [30, 0, 10, 40],
-  page_views: [40, 0, 12, 50],
 }
 const campaigns: Campaign[] = [
   {
     campaign_id: '11',
+    marketplace: 'US',
     campaign_name: 'SP one',
     ad_product: 'SP',
     ad_product_name: 'Sponsored Products',
@@ -52,6 +53,7 @@ const campaigns: Campaign[] = [
   },
   {
     campaign_id: '22',
+    marketplace: 'US',
     campaign_name: 'SB one',
     ad_product: 'SB',
     ad_product_name: 'Sponsored Brands',
@@ -61,6 +63,7 @@ const campaigns: Campaign[] = [
 ]
 const adsCampaign: AdsCampaignDaily = {
   date: ['2026-01-01', '2026-01-01', '2026-01-02'],
+  marketplace: ['US', 'US', 'US'],
   campaign_id: ['11', '22', '11'],
   impressions: [1000, 500, 1000],
   clicks: [10, 5, 10],
@@ -71,6 +74,7 @@ const adsCampaign: AdsCampaignDaily = {
 }
 const adsProduct: AdsProductDaily = {
   date: ['2026-01-01', '2026-01-02'],
+  marketplace: ['US', 'US'],
   asin: ['A1', 'A1'],
   impressions: [1000, 1000],
   clicks: [10, 10],
@@ -79,11 +83,26 @@ const adsProduct: AdsProductDaily = {
   sales: [40, 20],
 }
 const targets: Target[] = [
-  { campaign_id: '11', target_id: '1', ad_product: 'SP', target_text: 'k1', match_type: 'EXACT' },
-  { campaign_id: '22', target_id: '2', ad_product: 'SB', target_text: 'k2', match_type: 'BROAD' },
+  {
+    campaign_id: '11',
+    marketplace: 'US',
+    target_id: '1',
+    ad_product: 'SP',
+    target_text: 'k1',
+    match_type: 'EXACT',
+  },
+  {
+    campaign_id: '22',
+    marketplace: 'US',
+    target_id: '2',
+    ad_product: 'SB',
+    target_text: 'k2',
+    match_type: 'BROAD',
+  },
 ]
 const adsTarget: AdsTargetDaily = {
   date: ['2026-01-01', '2026-01-01', '2026-01-02'],
+  marketplace: ['US', 'US', 'US'],
   campaign_id: ['11', '22', '11'],
   target_id: ['1', '2', '1'],
   impressions: [1000, 500, 1000],
@@ -190,6 +209,7 @@ describe('products (FR-11)', () => {
 describe('inventory (FR-13, FR-14)', () => {
   const inventory: InventoryDaily = {
     date: ['2026-01-03', '2026-01-03'],
+    network: ['US', 'US'],
     asin: ['A1', 'A2'],
     available: [6, 0],
     reserved: [1, 0],

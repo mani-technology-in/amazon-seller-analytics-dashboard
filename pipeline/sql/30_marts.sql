@@ -161,7 +161,8 @@ SELECT
     (coalesce(s.referral_fee, 0) - coalesce(r.referral_fee_returned, 0)
         + coalesce(r.refund_admin_fee, 0))::numeric(12, 2) AS referral_fees,
     coalesce(s.fba_fee, 0)::numeric(12, 2) AS fba_fees,
-    round(coalesce(s.units, 0) * c.unit_cost / fx.usd_rate, 2)::numeric(12, 2) AS product_cost,
+    -- not rounded: converting back to USD gives units x unit cost exactly
+    (coalesce(s.units, 0) * c.unit_cost / fx.usd_rate)::numeric(16, 8) AS product_cost,
     m.currency
 FROM days d
 JOIN staging.stg_products p ON p.sku = d.sku

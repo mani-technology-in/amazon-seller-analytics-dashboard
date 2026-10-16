@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
 
 /** The page frame from the CR-1 UI design: navigation, labels and the Reduce motion switch. */
 

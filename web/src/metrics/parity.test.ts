@@ -13,11 +13,17 @@ import type {
   AdsProductDaily,
   AdsTargetDaily,
   Campaign,
+  FxMonthly,
   InventoryDaily,
+  Marketplace,
   Product,
+  ProfitDaily,
   SalesDaily,
   Target,
 } from '../data/types'
+import { FxRates, toUsd } from './currency'
+import { forMarketplaces, forNetworks, marketplaceShares } from './marketplace'
+import { accountProfit, marketplaceProfitRows, productProfitRows } from './profit'
 import { previousPeriod } from './dates'
 import {
   accountKpis,
@@ -67,13 +73,19 @@ interface Fixture {
     campaigns: Record<string, Record<string, Num>>
     targets: Record<string, Record<string, Num | boolean>>
     products: Record<string, Record<string, Num>>
+    marketplaces: Record<string, Record<string, Num>>
+    productProfit: Record<string, Record<string, Num>>
+    marketplaceProfit: Record<string, Record<string, Num>>
+    accountProfit: Record<string, Num>
   }[]
   inventory: { asOf: string; rows: Record<string, Record<string, Num | boolean>> }
 }
 
 describe.skipIf(!available)('metrics match SQL on the real data', () => {
   const fx: Fixture = available ? JSON.parse(readFileSync(FIXTURE, 'utf-8')) : null!
-  const data = available
+  // The v1.0 metrics run on the US marketplace (as the v1.0 pages show it); the CR-1 metrics
+  // run on every marketplace, converted to USD.
+  const all = available
     ? {
         sales: read<SalesDaily>('sales_daily.json'),
         adsCampaign: read<AdsCampaignDaily>('ads_campaign_daily.json'),
@@ -83,7 +95,38 @@ describe.skipIf(!available)('metrics match SQL on the real data', () => {
         products: read<Product[]>('products.json'),
         campaigns: read<Campaign[]>('campaigns.json'),
         targets: read<Target[]>('targets.json'),
+        marketplaces: read<Marketplace[]>('marketplaces.json'),
+        fxMonthly: read<FxMonthly>('fx_monthly.json'),
+        profit: read<ProfitDaily>('profit_daily.json'),
       }
+    : null!
+  const US = new Set(['US'] as const)
+  const data = available
+    ? {
+        ...all,
+        sales: forMarketplaces(all.sales, US),
+        adsCampaign: forMarketplaces(all.adsCampaign, US),
+        adsProduct: forMarketplaces(all.adsProduct, US),
+        adsTarget: forMarketplaces(all.adsTarget, US),
+        inventory: forNetworks(all.inventory, US, all.marketplaces),
+        campaigns: all.campaigns.filter((c) => c.marketplace === 'US'),
+        targets: all.targets.filter((t) => t.marketplace === 'US'),
+      }
+    : null!
+  const usd = available
+    ? (() => {
+        const rates = new FxRates(all.fxMonthly, all.marketplaces)
+        return {
+          sales: toUsd(all.sales, ['sales'], rates),
+          adsCampaign: toUsd(all.adsCampaign, ['cost', 'sales'], rates),
+          adsProduct: toUsd(all.adsProduct, ['cost', 'sales'], rates),
+          profit: toUsd(
+            all.profit,
+            ['principal', 'refunds', 'referral_fees', 'fba_fees', 'product_cost'],
+            rates,
+          ),
+        }
+      })()
     : null!
 
   const ranges = available ? fx.ranges : []
@@ -206,4 +249,64 @@ describe.skipIf(!available)('metrics match SQL on the real data', () => {
     }
     expect(rows.some((r) => r.lowStock)).toBe(true)
   })
+
+  it.each(ranges.map((r) => [r.name, r] as const))(
+    '%s: every marketplace, in USD, with its share of revenue',
+    (_, r) => {
+      const rows = marketplaceShares(usd.sales, { start: r.start, end: r.end })
+      expect(rows).toHaveLength(Object.keys(r.marketplaces).length)
+      for (const m of rows) {
+        const exp = r.marketplaces[m.marketplace]
+        const tag = `${r.name} ${m.marketplace}`
+        expect([m.orders, m.units]).toEqual([exp.orders, exp.units])
+        close(m.revenue, exp.revenue, MONEY, `${tag} revenue`)
+        close(m.aov, exp.aov, 1e-6, `${tag} AOV`)
+        close(m.share, exp.share, 1e-9, `${tag} share`)
+      }
+    },
+  )
+
+  it.each(ranges.map((r) => [r.name, r] as const))(
+    '%s: profit for every product, every marketplace and the account, in USD',
+    (_, r) => {
+      const range = { start: r.start, end: r.end }
+      const rows = productProfitRows(usd.profit, usd.adsProduct, all.products, range)
+      expect(rows).toHaveLength(Object.keys(r.productProfit).length)
+      for (const p of rows) {
+        const exp = r.productProfit[p.asin]
+        const tag = `${r.name} ${p.title}`
+        expect(p.units).toBe(exp.units)
+        close(p.revenue, exp.revenue, MONEY, `${tag} revenue`)
+        close(p.refunds, exp.refunds, MONEY, `${tag} refunds`)
+        close(p.referralFees, exp.referral_fees, MONEY, `${tag} referral fees`)
+        close(p.fbaFees, exp.fba_fees, MONEY, `${tag} FBA fees`)
+        close(p.adSpend, exp.ad_spend, MONEY, `${tag} ad spend`)
+        close(p.productCost, exp.product_cost, MONEY, `${tag} product cost`)
+        close(p.netProfit, exp.net_profit, MONEY, `${tag} net profit`)
+        expect(p.losesMoney, tag).toBe((exp.net_profit as number) < 0)
+      }
+      const byMarketplace = marketplaceProfitRows(usd.profit, usd.adsProduct, range)
+      expect(byMarketplace).toHaveLength(Object.keys(r.marketplaceProfit).length)
+      for (const m of byMarketplace) {
+        const exp = r.marketplaceProfit[m.marketplace]
+        expect(m.units).toBe(exp.units)
+        close(m.revenue, exp.revenue, MONEY, `${r.name} ${m.marketplace} revenue`)
+        close(m.adSpend, exp.ad_spend, MONEY, `${r.name} ${m.marketplace} ad spend`)
+        close(m.netProfit, exp.net_profit, MONEY, `${r.name} ${m.marketplace} net profit`)
+      }
+      const a = accountProfit(usd.profit, usd.adsCampaign, range)
+      const exp = r.accountProfit
+      expect(a.units).toBe(exp.units)
+      for (const [k, e] of [
+        ['revenue', 'revenue'],
+        ['refunds', 'refunds'],
+        ['referralFees', 'referral_fees'],
+        ['fbaFees', 'fba_fees'],
+        ['adSpend', 'ad_spend'],
+        ['productCost', 'product_cost'],
+        ['netProfit', 'net_profit'],
+      ] as const)
+        close(a[k], exp[e], MONEY, `${r.name} account ${k}`)
+    },
+  )
 })

@@ -1,5 +1,6 @@
 import { AxeBuilder } from '@axe-core/playwright'
-import { expect, test, type Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
+import { expect, isAbortedFontLoad, test } from './fixtures.ts'
 
 /**
  * Smoke test: every page renders real data with no browser errors, and the core interactions
@@ -11,7 +12,7 @@ function watchErrors(page: Page): string[] {
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text())
+    if (m.type() === 'error' && !isAbortedFontLoad(m.text())) errors.push(m.text())
   })
   return errors
 }

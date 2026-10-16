@@ -8,6 +8,8 @@ Version 1.1 (change request CR-1): a redesign to match the Amazon section of man
 
 ### Added
 
+- Metrics for marketplaces, currency and profit (`web/src/metrics/marketplace.ts`, `currency.ts`, `profit.ts`): the marketplace filter, conversion to USD at each month's rate, shares of revenue, and product, marketplace and account profit with the revenue-to-profit steps. The parity check now compares every marketplace's share of revenue and every product's, marketplace's and the account's profit with SQL too (plus a one-day range where some products have ad spend and no sales).
+- The data export covers all six marketplaces (schema version 2) and adds `profit_daily.json`; the existing pages show the US marketplace through a marketplace view, so they are unchanged.
 - Profit data: Amazon fees, refunds and refund administration fees shaped like the SP-API Finances API (`finances/<MKT>/`), the seller's product costs (`product_costs.csv`), new marts `fct_profit_daily` and `dim_product_cost`, and a SQL product-profit query (`pipeline/profit.py`) for the profit metrics to be checked against.
 - New look, part 1: design tokens (`design/tokens.json`) shared by the stylesheet and the charts, Plus Jakarta Sans and JetBrains Mono bundled from npm (SIL OFL, served from the demo's own domain), a side navigation in the website's page order, a header with the "Synthetic demo data" label and a **Reduce motion** switch, and a short cross-fade between pages.
 - New look, part 2: KPI tiles with gradient numbers, charts in the accent and violet series with mono labels, tables with mono numbers and "Download CSV" buttons, flags, filters and skeleton loading, all from the tokens. Tailwind's default colours are switched off and a test fails if a component hard-codes a colour.
@@ -25,6 +27,7 @@ Version 1.1 (change request CR-1): a redesign to match the Amazon section of man
 
 ### Fixed
 
+- Browser tests no longer wait for the page's load event, which Firefox can hold for over 30 seconds while fonts and data arrive, and ignore font downloads cancelled by the test moving on (#26).
 - Production deploys failed their last check since the Content-Security-Policy arrived: Cloudflare Web Analytics adds its beacon script to demo.manitechnology.com, and the policy blocked it. The policy now allows that one script and its reporting address.
 - Chart tooltips no longer use inline styles, which the new Content-Security-Policy would block.
 
