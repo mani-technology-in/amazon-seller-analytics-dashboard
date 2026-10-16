@@ -17,7 +17,7 @@ function status(r: InventoryRow): 0 | 1 | 2 {
 export function InventoryPage() {
   const manifest = useOutletContext<Manifest>()
   const { filters, update } = useFilters(manifest.dataStart, manifest.dataEnd)
-  const data = useDatasets('inventoryDaily', 'salesDaily', 'products')
+  const data = useDatasets('inventoryDaily', 'salesDaily', 'products', 'marketplaces')
 
   const rows = useMemo(
     () =>
@@ -28,6 +28,7 @@ export function InventoryPage() {
             data.data.products,
             manifest.dataEnd,
             filters.lowStockDays,
+            new Map(data.data.marketplaces.map((m) => [m.marketplace, m.network])),
           )
         : null,
     [data, manifest.dataEnd, filters.lowStockDays],
@@ -73,7 +74,7 @@ export function InventoryPage() {
           <DataTable<InventoryRow>
             title="FBA inventory"
             rows={rows}
-            rowKey={(r) => r.asin}
+            rowKey={(r) => `${r.network} ${r.asin}`}
             csvName="inventory.csv"
             initialSort={{ id: 'cover', desc: false }}
             columns={
@@ -83,10 +84,19 @@ export function InventoryPage() {
                   header: 'Product',
                   value: (r) => r.title,
                   cell: (r) => (
-                    <Link className="text-accent-strong hover:underline" to={`/products/${r.asin}`}>
+                    <Link
+                      className="text-accent-strong hover:underline"
+                      to={{ pathname: `/sales/${r.asin}`, search: location.search }}
+                    >
                       {r.title.replace('Demo Brand ', '')}
                     </Link>
                   ),
+                },
+                {
+                  id: 'network',
+                  header: 'Network',
+                  value: (r) => r.network,
+                  hint: 'Fulfilment network: Germany and France share the EU stock',
                 },
                 { id: 'category', header: 'Category', value: (r) => r.category },
                 {

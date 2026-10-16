@@ -18,9 +18,17 @@ function watchErrors(page: Page): string[] {
 }
 
 const PAGES = [
-  { path: '/', heading: 'Overview', expects: ['Total sales', 'Top 5 products by sales'] },
+  {
+    path: '/',
+    heading: 'Overview',
+    expects: ['Revenue against ad spend', 'Units by marketplace', 'Top 5 products by revenue'],
+  },
+  {
+    path: '/sales',
+    heading: 'Sales',
+    expects: ['Unit session percentage', 'Revenue by marketplace', 'Share of revenue'],
+  },
   { path: '/advertising', heading: 'Advertising', expects: ['Campaigns', 'Keywords and targets'] },
-  { path: '/products', heading: 'Products', expects: ['Conv. rate', 'TACoS'] },
   { path: '/inventory', heading: 'Inventory', expects: ['FBA inventory', 'Days of cover'] },
 ]
 
@@ -41,23 +49,62 @@ for (const p of PAGES) {
   })
 }
 
-test('the Overview shows KPI values and draws both charts', async ({ page }) => {
+test('the Overview shows KPI values, the revenue chart and units by marketplace', async ({
+  page,
+}) => {
   await page.goto('/')
   const kpis = page.getByRole('region', { name: 'Key figures' })
   await expect(kpis.getByText(/^\$[\d.]+[KM]$/).first()).toBeVisible()
-  await expect(page.locator('figure')).toHaveCount(2)
-  // each chart draws its two series lines in the palette colours
+  await expect(page.locator('figure')).toHaveCount(1)
+  // the chart draws revenue and ad spend in the palette colours
   for (const color of ['#0078f0', '#783fee']) {
-    await expect(page.locator(`figure svg path[stroke="${color}"]`)).toHaveCount(2)
+    await expect(page.locator(`figure svg path[stroke="${color}"]`)).toHaveCount(1)
   }
+  // one small chart per marketplace, all six by default (FR-17, FR-20)
+  await expect(page.getByRole('img', { name: /units per week/ })).toHaveCount(6)
+})
+
+test('one marketplace in its own currency (FR-17, FR-18)', async ({ page }) => {
+  await page.goto('/sales')
+  const local = page.getByRole('button', { name: 'Local currency' })
+  await expect(local).toBeDisabled() // all marketplaces: US dollars only
+  await page.getByLabel('Marketplace').selectOption('UK')
+  await expect(page).toHaveURL(/mkt=UK/)
+  await page.getByRole('button', { name: 'Local (GBP)' }).click()
+  await expect(page).toHaveURL(/cur=local/)
+  const kpis = page.getByRole('region', { name: 'Key figures' })
+  await expect(kpis.getByText(/^£[\d.,]+[KM]?$/).first()).toBeVisible()
+  await expect(page.getByRole('img', { name: /daily revenue/ })).toHaveCount(1)
+  await expect(page.getByRole('columnheader', { name: /Revenue \(GBP\)/ }).first()).toBeVisible()
+  // back to all marketplaces: back to US dollars
+  await page.getByLabel('Marketplace').selectOption('all')
+  await expect(page).not.toHaveURL(/cur=local/)
+  await expect(page.getByRole('img', { name: /daily revenue/ })).toHaveCount(6)
+})
+
+test('a product opens its revenue by marketplace in the Sales table (FR-11)', async ({ page }) => {
+  await page.goto('/sales')
+  const toggle = page.getByRole('button', { name: /^Revenue by marketplace for / }).first()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  await expect(
+    page.getByRole('list', { name: 'Revenue by marketplace' }).getByRole('listitem'),
+  ).toHaveCount(6)
+})
+
+test('old Products links open the Sales page, filters kept (FR-16)', async ({ page }) => {
+  await page.goto('/products?preset=last7')
+  await expect(page).toHaveURL(/\/sales\?preset=last7$/)
+  await expect(page.getByRole('heading', { level: 1, name: 'Sales' })).toBeVisible()
 })
 
 test('a product detail page opens from the products table (deep link)', async ({ page }) => {
-  await page.goto('/products')
+  await page.goto('/sales')
   const first = page.locator('tbody a').first()
   const name = await first.textContent()
   await first.click()
-  await expect(page).toHaveURL(/\/products\/B0[A-Z0-9]{8}$/)
+  await expect(page).toHaveURL(/\/sales\/B0[A-Z0-9]{8}$/)
   await expect(page.getByRole('heading', { level: 1 })).toContainText(name!)
   await page.reload() // the URL works on its own, not only from inside the app
   await expect(page.getByRole('heading', { level: 1 })).toContainText(name!)
@@ -83,7 +130,7 @@ test('dates with no data fall back to the default range and say so', async ({ pa
 })
 
 test('every page passes an automated accessibility check (WCAG 2.2 AA)', async ({ page }) => {
-  for (const path of ['/', '/advertising', '/products', '/inventory']) {
+  for (const path of ['/', '/sales', '/advertising', '/inventory']) {
     await page.goto(path)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     await expect(page.getByRole('status')).toHaveCount(0)
@@ -125,9 +172,9 @@ test('the security headers are sent and chart tooltips break no CSP rule', async
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
 
   // A product detail page has charts too; open the first product from the table.
-  await page.goto('/products')
+  await page.goto('/sales')
   const productPath = await page.locator('tbody a').first().getAttribute('href')
-  expect(productPath).toMatch(/^\/products\/B0/)
+  expect(productPath).toMatch(/^\/sales\/B0/)
   for (const path of ['/', productPath!]) {
     await page.goto(path)
     await expect(page.getByRole('status')).toHaveCount(0)
@@ -145,7 +192,7 @@ test('the security headers are sent and chart tooltips break no CSP rule', async
 })
 
 test('a table exports CSV', async ({ page }) => {
-  await page.goto('/inventory')
+  await page.goto('/inventory?mkt=US')
   const [download] = await Promise.all([
     page.waitForEvent('download'),
     page.getByRole('button', { name: 'Download CSV' }).click(),
@@ -155,12 +202,14 @@ test('a table exports CSV', async ({ page }) => {
   const chunks: Buffer[] = []
   for await (const c of stream) chunks.push(c as Buffer)
   const lines = Buffer.concat(chunks).toString('utf-8').trim().split(/\r?\n/)
-  expect(lines[0]).toBe('Product,Category,Available,Inbound,Avg daily units,Days of cover,Status')
-  expect(lines.length).toBe(41) // header + 40 products
+  expect(lines[0]).toBe(
+    'Product,Network,Category,Available,Inbound,Avg daily units,Days of cover,Status',
+  )
+  expect(lines.length).toBe(41) // header + 40 products in the US network
 })
 
 test('the page never scrolls sideways at phone width @phone', async ({ page }) => {
-  for (const path of ['/', '/advertising', '/products', '/inventory']) {
+  for (const path of ['/', '/sales', '/advertising', '/inventory']) {
     await page.goto(path)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     await expect(page.getByRole('status')).toHaveCount(0)

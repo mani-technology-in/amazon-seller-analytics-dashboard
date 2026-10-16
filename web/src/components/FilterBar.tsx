@@ -1,6 +1,8 @@
-import type { FilterPatch, Filters } from '../app/filters'
+import { useId } from 'react'
+import { LOCAL_CURRENCY, type FilterPatch, type Filters } from '../app/filters'
 import type { AdProduct, Campaign, ISODate } from '../data/types'
 import { PRESETS } from '../metrics/dates'
+import { MARKETPLACE_CODES, MARKETPLACE_NAMES } from '../metrics/marketplace'
 import { dateLong } from '../lib/format'
 
 const AD_LABELS: { id: AdProduct; label: string }[] = [
@@ -37,6 +39,8 @@ export function FilterBar({
   showLowStock,
 }: FilterBarProps) {
   const { range, previous } = filters
+  const localHint = useId()
+  const single = filters.marketplace !== 'all'
   const adOptions = campaigns
     ? campaigns.filter(
         (c) => !filters.adProducts.length || filters.adProducts.includes(c.ad_product),
@@ -54,6 +58,56 @@ export function FilterBar({
 
   return (
     <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
+      <label className="flex flex-col gap-1 text-caption font-medium text-ink-2">
+        Marketplace
+        <select
+          className={control}
+          value={filters.marketplace}
+          onChange={(e) => {
+            const mkt = e.target.value
+            // local currency only makes sense for one marketplace
+            update(mkt === 'all' ? { mkt: null, cur: null } : { mkt })
+          }}
+        >
+          <option value="all">All marketplaces</option>
+          {MARKETPLACE_CODES.map((c) => (
+            <option key={c} value={c}>
+              {MARKETPLACE_NAMES[c]} ({c})
+            </option>
+          ))}
+        </select>
+      </label>
+      <fieldset className="flex flex-col gap-1 text-caption font-medium text-ink-2">
+        <legend className="mb-1">Currency</legend>
+        <div className="flex h-10 items-center gap-0.5 rounded-md bg-surface-sunken p-[3px]">
+          {(['usd', 'local'] as const).map((c) => {
+            const on = filters.currency === c
+            const disabled = c === 'local' && !single
+            return (
+              <button
+                key={c}
+                type="button"
+                aria-pressed={on}
+                disabled={disabled}
+                aria-describedby={disabled ? localHint : undefined}
+                onClick={() => update({ cur: c === 'local' ? 'local' : null })}
+                className={`h-full rounded-sm px-3 text-small ${on ? 'bg-surface-page font-semibold text-ink shadow-raised' : 'text-ink-2 hover:text-ink disabled:cursor-not-allowed disabled:text-ink-disabled'}`}
+              >
+                {c === 'usd'
+                  ? 'USD'
+                  : single
+                    ? `Local (${LOCAL_CURRENCY[filters.marketplace as Exclude<typeof filters.marketplace, 'all'>]})`
+                    : 'Local currency'}
+              </button>
+            )
+          })}
+        </div>
+        {single ? null : (
+          <span id={localHint} className="sr-only">
+            Pick one marketplace to see its local currency
+          </span>
+        )}
+      </fieldset>
       {showDates ? (
         <>
           <label className="flex flex-col gap-1 text-caption font-medium text-ink-2">

@@ -1,6 +1,9 @@
 import { useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import type { AdProduct, ISODate } from '../data/types'
+import type { AdProduct, CurrencyCode, ISODate, MarketplaceCode } from '../data/types'
+import type { Selection } from '../data/selection'
+import type { DisplayCurrency } from '../metrics/currency'
+import { MARKETPLACE_CODES, selectedCodes, type MarketplaceChoice } from '../metrics/marketplace'
 import {
   clampRange,
   DEFAULT_PRESET,
@@ -14,7 +17,9 @@ import { DEFAULT_LOW_STOCK_DAYS, DEFAULT_TARGET_ACOS } from '../metrics/metrics'
 /**
  * Page filters live in the URL, so any view can be bookmarked or shared (FR-1, FR-9).
  *
- *   ?preset=last7|last30|last90|mtd|custom  &from=YYYY-MM-DD&to=YYYY-MM-DD (custom)
+ *   ?mkt=US|CA|MX|UK|DE|FR                  one marketplace (default: all of them)
+ *   &cur=local                              its local currency (default: US dollars)
+ *   &preset=last7|last30|last90|mtd|custom  &from=YYYY-MM-DD&to=YYYY-MM-DD (custom)
  *   &compare=off                            hide the previous-period comparison
  *   &ad=SP,SD                               ad types (Advertising page)
  *   &campaign=<id>                          one campaign (Advertising page)
@@ -22,6 +27,9 @@ import { DEFAULT_LOW_STOCK_DAYS, DEFAULT_TARGET_ACOS } from '../metrics/metrics'
  *   &lowstock=21                            low-stock threshold in days of cover
  */
 export interface Filters {
+  marketplace: MarketplaceChoice
+  /** 'local' only with one marketplace; otherwise always 'usd' */
+  currency: DisplayCurrency
   preset: PresetId
   range: DateRange
   previous: DateRange | null
@@ -35,6 +43,38 @@ export interface Filters {
 }
 
 const AD_PRODUCTS: AdProduct[] = ['SP', 'SB', 'SD']
+
+/** Each marketplace's own currency (the same as marketplaces.json; the parity test checks). */
+export const LOCAL_CURRENCY: Record<MarketplaceCode, CurrencyCode> = {
+  US: 'USD',
+  CA: 'CAD',
+  MX: 'MXN',
+  UK: 'GBP',
+  DE: 'EUR',
+  FR: 'EUR',
+}
+
+/** The marketplace and currency in the URL; anything unknown means all marketplaces in USD. */
+export function parseSelection(params: URLSearchParams): {
+  marketplace: MarketplaceChoice
+  currency: DisplayCurrency
+} {
+  const raw = params.get('mkt') as MarketplaceCode | null
+  const marketplace = raw && MARKETPLACE_CODES.includes(raw) ? raw : 'all'
+  const currency = marketplace !== 'all' && params.get('cur') === 'local' ? 'local' : 'usd'
+  return { marketplace, currency }
+}
+
+/** What the data layer loads for these URL parameters. */
+export function selectionFromParams(params: URLSearchParams): Selection {
+  const { marketplace, currency } = parseSelection(params)
+  return { marketplaces: [...selectedCodes(marketplace)], currency }
+}
+
+/** The ISO code of the money on screen. */
+export function displayCurrency(f: Pick<Filters, 'marketplace' | 'currency'>): CurrencyCode {
+  return f.currency === 'local' && f.marketplace !== 'all' ? LOCAL_CURRENCY[f.marketplace] : 'USD'
+}
 const PRESET_IDS: PresetId[] = ['last7', 'last30', 'last90', 'mtd', 'custom']
 const isDate = (s: string | null): s is ISODate => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s)
 
@@ -76,6 +116,7 @@ export function parseFilters(
     .filter((a): a is AdProduct => AD_PRODUCTS.includes(a as AdProduct))
 
   return {
+    ...parseSelection(params),
     preset,
     range,
     previous: compare ? previousPeriod(range, dataStart) : null,
@@ -90,7 +131,7 @@ export function parseFilters(
 
 export type FilterPatch = Partial<
   Record<
-    'preset' | 'from' | 'to' | 'compare' | 'ad' | 'campaign' | 'acos' | 'lowstock',
+    'mkt' | 'cur' | 'preset' | 'from' | 'to' | 'compare' | 'ad' | 'campaign' | 'acos' | 'lowstock',
     string | null
   >
 >

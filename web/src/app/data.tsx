@@ -1,10 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { StaticJsonDataSource, type DataSource } from '../data/dataSource'
 import { selectData, type Datasets, type Selection } from '../data/selection'
-import { DataSourceContext } from './dataContext'
-
-// The pages show the US marketplace in USD until the filter bar offers a choice (CR-1 PR 6b).
-const DEFAULT_SELECTION: Selection = { marketplaces: ['US'], currency: 'usd' }
+import { DataSourceContext, type SelectData } from './dataContext'
 
 export function DataSourceProvider({
   source,
@@ -13,8 +10,20 @@ export function DataSourceProvider({
   source?: DataSource
   children: ReactNode
 }) {
-  const [ds] = useState<Datasets>(() =>
-    selectData(source ?? new StaticJsonDataSource(), DEFAULT_SELECTION),
-  )
-  return <DataSourceContext.Provider value={ds}>{children}</DataSourceContext.Provider>
+  // One data source for the visit (it keeps each downloaded file), and one view of it per
+  // choice of marketplaces and currency, so switching back and forth downloads nothing again.
+  const [select] = useState<SelectData>(() => {
+    const ds = source ?? new StaticJsonDataSource()
+    const views = new Map<string, Datasets>()
+    return (sel: Selection): Datasets => {
+      const key = `${sel.marketplaces.join(',')}|${sel.currency}`
+      let v = views.get(key)
+      if (!v) {
+        v = selectData(ds, sel)
+        views.set(key, v)
+      }
+      return v
+    }
+  })
+  return <DataSourceContext.Provider value={select}>{children}</DataSourceContext.Provider>
 }
