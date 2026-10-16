@@ -222,7 +222,11 @@ test.describe('analytics', () => {
     })
     // analytics stays off in automated browsers; pretend to be a person for this test
     await page.addInitScript(() =>
-      Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => false }),
+      Object.defineProperties(Navigator.prototype, {
+        webdriver: { get: () => false },
+        // CI's Chromium also names itself "HeadlessChrome" in its client hints
+        userAgentData: { get: () => undefined },
+      }),
     )
     await page.goto('/')
     await expect.poll(() => events.length, { timeout: 15_000 }).toBeGreaterThan(0)
