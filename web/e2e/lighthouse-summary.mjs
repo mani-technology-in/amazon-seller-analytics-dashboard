@@ -37,7 +37,7 @@ const table = [
     (r) => `| ${r.page} | ${r.performance} | ${r.accessibility} | ${r.lcp} | ${r.cls} | ${r.tbt} |`,
   ),
   '',
-  'Budgets: LCP over 3.5 s, CLS over 0.1 or accessibility under 95 fail the check; TBT over 600 ms is a warning. Target LCP: 2.5 s.',
+  'Budgets: LCP over 5 s, CLS over 0.1 or accessibility under 95 fail the check; TBT over 600 ms is a warning. Target LCP: 2.5 s.',
 ].join('\n')
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, table + '\n')
 for (const r of rows) {

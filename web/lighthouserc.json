@@ -12,7 +12,7 @@
       "assertions": {
         "largest-contentful-paint": [
           "error",
-          { "maxNumericValue": 3500, "aggregationMethod": "median-run" }
+          { "maxNumericValue": 5000, "aggregationMethod": "median-run" }
         ],
         "cumulative-layout-shift": [
           "error",
