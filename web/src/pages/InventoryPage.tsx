@@ -17,14 +17,14 @@ function status(r: InventoryRow): 0 | 1 | 2 {
 export function InventoryPage() {
   const manifest = useOutletContext<Manifest>()
   const { filters, update } = useFilters(manifest.dataStart, manifest.dataEnd)
-  const data = useDatasets('inventoryDaily', 'salesDaily', 'products', 'marketplaces')
+  const data = useDatasets('inventoryDaily', 'stockSalesDaily', 'products', 'marketplaces')
 
   const rows = useMemo(
     () =>
       data.status === 'ready'
         ? inventoryRows(
             data.data.inventoryDaily,
-            data.data.salesDaily,
+            data.data.stockSalesDaily,
             data.data.products,
             manifest.dataEnd,
             filters.lowStockDays,
@@ -36,8 +36,11 @@ export function InventoryPage() {
 
   if (data.status === 'error') return <ErrorBox error={data.error} />
 
-  const out = rows?.filter((r) => r.outOfStock).length ?? 0
-  const low = rows?.filter((r) => r.lowStock).length ?? 0
+  // products, not product-network rows: one product short in two networks counts once
+  const products = (keep: (r: InventoryRow) => boolean) =>
+    new Set(rows?.filter(keep).map((r) => r.asin)).size
+  const out = products((r) => r.outOfStock)
+  const low = products((r) => r.lowStock)
 
   return (
     <>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { Link, useOutletContext, useParams } from 'react-router-dom'
 import { useFilters } from '../app/filters'
 import { useMoney } from '../app/money'
@@ -26,6 +26,7 @@ type MarketRow = MarketplaceShare & { change: number | null }
 /** A product name that opens its revenue by marketplace underneath (FR-11). */
 function ProductName({ row, money }: { row: SalesProductRow; money: (v: number) => string }) {
   const [open, setOpen] = useState(false)
+  const listId = useId()
   const name = row.title.replace('Demo Brand ', '')
   return (
     <div className="min-w-56 whitespace-normal">
@@ -34,6 +35,7 @@ function ProductName({ row, money }: { row: SalesProductRow; money: (v: number) 
           <button
             type="button"
             aria-expanded={open}
+            aria-controls={listId}
             aria-label={`Revenue by marketplace for ${name}`}
             onClick={() => setOpen(!open)}
             className="flex size-7 shrink-0 items-center justify-center rounded-sm text-ink-3 hover:bg-surface-hover hover:text-ink"
@@ -66,7 +68,11 @@ function ProductName({ row, money }: { row: SalesProductRow; money: (v: number) 
         </Link>
       </div>
       {open ? (
-        <ul aria-label="Revenue by marketplace" className="mt-2 ml-8 flex flex-wrap gap-2">
+        <ul
+          id={listId}
+          aria-label="Revenue by marketplace"
+          className="mt-2 ml-8 flex flex-wrap gap-2"
+        >
           {row.split.map((s) => (
             <li
               key={s.marketplace}

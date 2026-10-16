@@ -37,7 +37,13 @@ export function OverviewPage() {
   const manifest = useOutletContext<Manifest>()
   const { filters, update } = useFilters(manifest.dataStart, manifest.dataEnd)
   const m = useMoney()
-  const data = useDatasets('overviewDaily', 'salesDaily', 'inventoryDaily', 'products')
+  const data = useDatasets(
+    'overviewDaily',
+    'salesDaily',
+    'stockSalesDaily',
+    'inventoryDaily',
+    'products',
+  )
 
   const view = useMemo(() => {
     if (data.status !== 'ready') return null
@@ -45,8 +51,10 @@ export function OverviewPage() {
     const { range, previous } = filters
     const totals = overviewTotals(d.overviewDaily, range)
     const prev = previous ? overviewTotals(d.overviewDaily, previous) : null
-    const stock = stockCover(d.inventoryDaily, d.salesDaily, range.end)
-    const prevStock = previous ? stockCover(d.inventoryDaily, d.salesDaily, previous.end) : null
+    const stock = stockCover(d.inventoryDaily, d.stockSalesDaily, range.end)
+    const prevStock = previous
+      ? stockCover(d.inventoryDaily, d.stockSalesDaily, previous.end)
+      : null
     const chart = revenueAndSpend(d.overviewDaily, range)
     const daily = new Map(daysOf(range).map((day) => [day, 0]))
     for (let i = 0; i < d.overviewDaily.date.length; i++) {

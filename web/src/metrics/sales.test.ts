@@ -44,7 +44,7 @@ describe('overview (FR-5, FR-6, FR-20)', () => {
 
   it('the revenue chart is daily up to 60 days and weekly beyond', () => {
     expect(buckets({ start: '2026-08-02', end: '2026-09-30' })).toHaveLength(60)
-    expect(buckets({ start: '2026-08-01', end: '2026-09-30' })).toHaveLength(9) // 61 days
+    expect(buckets({ start: '2026-08-01', end: '2026-09-30' })).toHaveLength(8) // 61 days: 8 whole weeks
     const daily = revenueAndSpend(overview, sept)
     expect(daily).toHaveLength(14)
     expect(daily[0]).toMatchObject({ start: '2026-09-01', revenue: 140, adSpend: 14 })

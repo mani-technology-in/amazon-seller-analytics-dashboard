@@ -67,8 +67,14 @@ test('the Overview shows KPI values, the revenue chart and units by marketplace'
 test('one marketplace in its own currency (FR-17, FR-18)', async ({ page }) => {
   await page.goto('/sales')
   const local = page.getByRole('button', { name: 'Local currency' })
-  await expect(local).toBeDisabled() // all marketplaces: US dollars only
-  await page.getByLabel('Marketplace').selectOption('UK')
+  // all marketplaces: US dollars only; the button stays focusable and says why
+  await expect(local).toHaveAttribute('aria-disabled', 'true')
+  await expect(local).toHaveAccessibleDescription('Pick one marketplace to see its local currency')
+  await local.focus()
+  await expect(local).toBeFocused()
+  await page.keyboard.press('Enter') // does nothing
+  await expect(page).not.toHaveURL(/cur=local/)
+  await page.getByRole('combobox', { name: /^Marketplace/ }).selectOption('UK')
   await expect(page).toHaveURL(/mkt=UK/)
   await page.getByRole('button', { name: 'Local (GBP)' }).click()
   await expect(page).toHaveURL(/cur=local/)
@@ -77,7 +83,7 @@ test('one marketplace in its own currency (FR-17, FR-18)', async ({ page }) => {
   await expect(page.getByRole('img', { name: /daily revenue/ })).toHaveCount(1)
   await expect(page.getByRole('columnheader', { name: /Revenue \(GBP\)/ }).first()).toBeVisible()
   // back to all marketplaces: back to US dollars
-  await page.getByLabel('Marketplace').selectOption('all')
+  await page.getByRole('combobox', { name: /^Marketplace/ }).selectOption('all')
   await expect(page).not.toHaveURL(/cur=local/)
   await expect(page.getByRole('img', { name: /daily revenue/ })).toHaveCount(6)
 })
@@ -130,6 +136,7 @@ test('dates with no data fall back to the default range and say so', async ({ pa
 })
 
 test('every page passes an automated accessibility check (WCAG 2.2 AA)', async ({ page }) => {
+  test.slow() // four full scans; Firefox and WebKit in CI need more than 30 seconds
   for (const path of ['/', '/sales', '/advertising', '/inventory']) {
     await page.goto(path)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()

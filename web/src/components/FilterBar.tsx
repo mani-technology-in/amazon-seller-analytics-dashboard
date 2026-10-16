@@ -66,7 +66,10 @@ export function FilterBar({
           onChange={(e) => {
             const mkt = e.target.value
             // local currency only makes sense for one marketplace
-            update(mkt === 'all' ? { mkt: null, cur: null } : { mkt })
+            // a campaign belongs to one marketplace
+            update(
+              mkt === 'all' ? { mkt: null, cur: null, campaign: null } : { mkt, campaign: null },
+            )
           }}
         >
           <option value="all">All marketplaces</option>
@@ -88,10 +91,12 @@ export function FilterBar({
                 key={c}
                 type="button"
                 aria-pressed={on}
-                disabled={disabled}
+                // aria-disabled, not disabled: it stays focusable, so the reason can be heard
+                aria-disabled={disabled || undefined}
                 aria-describedby={disabled ? localHint : undefined}
-                onClick={() => update({ cur: c === 'local' ? 'local' : null })}
-                className={`h-full rounded-sm px-3 text-small ${on ? 'bg-surface-page font-semibold text-ink shadow-raised' : 'text-ink-2 hover:text-ink disabled:cursor-not-allowed disabled:text-ink-disabled'}`}
+                title={disabled ? 'Pick one marketplace to see its local currency' : undefined}
+                onClick={() => !disabled && update({ cur: c === 'local' ? 'local' : null })}
+                className={`h-full rounded-sm px-3 text-small ${on ? 'bg-surface-page font-semibold text-ink shadow-raised' : disabled ? 'cursor-not-allowed text-ink-disabled' : 'text-ink-2 hover:text-ink'}`}
               >
                 {c === 'usd'
                   ? 'USD'

@@ -54,7 +54,13 @@ export interface Bucket {
  */
 export function buckets(range: DateRange, maxDaily = 60): Bucket[] {
   if (rangeLength(range) <= maxDaily) return daysOf(range).map((d) => ({ start: d, end: d }))
-  return weeks(range)
+  return wholeWeeks(range)
+}
+
+/** Weeks without a short first one, which would draw as a misleading dip. */
+function wholeWeeks(range: DateRange): Bucket[] {
+  const ws = weeks(range)
+  return ws.length > 1 && rangeLength(ws[0]) < 7 ? ws.slice(1) : ws
 }
 
 /** 7-day weeks ending on the range's last day; the first one can be shorter. */
@@ -111,10 +117,8 @@ export function byMarketplace(
   value: (i: number) => number,
   weekly: boolean,
 ): MarketplaceSeries[] {
-  let bs = weekly ? weeks(range) : daysOf(range).map((d) => ({ start: d, end: d }))
-  // A short first week would draw as a misleadingly low bar: show whole weeks only (the total
-  // still covers every day of the range).
-  if (weekly && bs.length > 1 && rangeLength(bs[0]) < 7) bs = bs.slice(1)
+  // whole weeks only; the total still covers every day of the range
+  const bs = weekly ? wholeWeeks(range) : daysOf(range).map((d) => ({ start: d, end: d }))
   const at = bucketIndex(bs)
   const series = new Map<MarketplaceCode, { values: number[]; total: number }>()
   for (let i = 0; i < o.date.length; i++) {
