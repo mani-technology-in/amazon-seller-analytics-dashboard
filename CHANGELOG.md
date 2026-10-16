@@ -27,6 +27,7 @@ Version 1.1 (change request CR-1): a redesign to match the Amazon section of man
 
 ### Fixed
 
+- Firefox smoke tests sometimes timed out on a test's first page load (#26). CI traces showed the page loading fully in under 2 seconds while Firefox's page-ready signal never reached the test; an A/B run pinned it on the Cross-Origin-Opener-Policy header (3 failures in 136 runs with it, none in 136 without). The header is removed; it is not in the MT security header list. CI now keeps and summarises the traces of any failed smoke-test attempt.
 - Browser tests no longer wait for the page's load event, which Firefox can hold for over 30 seconds while fonts and data arrive, and ignore font downloads cancelled by the test moving on (#26).
 - Production deploys failed their last check since the Content-Security-Policy arrived: Cloudflare Web Analytics adds its beacon script to demo.manitechnology.com, and the policy blocked it. The policy now allows that one script and its reporting address.
 - Chart tooltips no longer use inline styles, which the new Content-Security-Policy would block.

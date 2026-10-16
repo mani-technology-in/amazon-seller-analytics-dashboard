@@ -86,7 +86,7 @@ jobs:
         run: npx playwright install --with-deps chromium firefox webkit
       - name: Smoke test the build
         working-directory: web
-        run: npm run smoke
+        run: npm run smoke -- --output=test-results/build
 
       - name: Create the Pages project if it does not exist
         working-directory: web
@@ -133,7 +133,7 @@ jobs:
             echo "$path -> $code"
             test "$code" = "200"
           done
-          npm run smoke
+          npm run smoke -- --output=test-results/preview
 
       - name: Smoke test the custom domain (production only)
         if: inputs.branch == 'main'
@@ -158,7 +158,23 @@ jobs:
             test "$code" = "200"
           done
           # The smoke test also checks the security headers on this domain (NFR-SEC-1).
-          npm run smoke
+          npm run smoke -- --output=test-results/production
+
+      # Keep the Playwright trace (requests, timings, screenshots, console) of any smoke test
+      # attempt that failed, including ones that passed on retry, so the failure can be read
+      # without re-running it (issue #26). Each smoke run writes to its own folder.
+      - name: Keep the traces of failed smoke test attempts
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: smoke-traces-${{ inputs.branch }}-${{ github.run_attempt }}
+          path: web/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Summarise the traces of failed smoke test attempts
+        if: always()
+        working-directory: web
+        run: node e2e/trace-summary.mjs test-results
 
       - name: Summary
         env:
