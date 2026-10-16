@@ -171,6 +171,10 @@ jobs:
           path: web/test-results/
           retention-days: 14
           if-no-files-found: ignore
+      - name: Summarise the traces of failed smoke test attempts
+        if: always()
+        working-directory: web
+        run: node e2e/trace-summary.mjs test-results
 
       - name: Summary
         env:
