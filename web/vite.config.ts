@@ -28,14 +28,7 @@ function siteHeaders(): Record<string, string> {
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  preview: {
-    headers: Object.fromEntries(
-      Object.entries(siteHeaders()).filter(
-        // EXPERIMENT (#26, temporary): drop COOP to test whether it causes Firefox's hang
-        ([k]) => !(process.env.PREVIEW_NO_COOP === '1' && k === 'Cross-Origin-Opener-Policy'),
-      ),
-    ),
-  },
+  preview: { headers: siteHeaders() },
   // Fonts stay files: Vite would inline the smallest font subsets as data: URLs, which the
   // Content-Security-Policy (font-src 'self') blocks.
   build: { assetsInlineLimit: (file) => (file.endsWith('.woff2') ? false : undefined) },

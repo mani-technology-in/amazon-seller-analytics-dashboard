@@ -1,9 +1,10 @@
 # Cloudflare Web Analytics (cookieless) is switched on for the whole manitechnology.com zone and
 # adds its beacon script to demo.manitechnology.com, so its two addresses are allowed; nothing else is.
+# No Cross-Origin-Opener-Policy: it is not in the MT header list, and in CI it made Firefox (via
+# Playwright) miss the page-ready signal on a test's first navigation (issue #26).
 /*
   Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self' https://cloudflareinsights.com; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'
   Strict-Transport-Security: max-age=31536000
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
-  Cross-Origin-Opener-Policy: same-origin
