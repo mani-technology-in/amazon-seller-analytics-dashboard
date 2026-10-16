@@ -46,15 +46,20 @@ export interface Selection {
 
 /** Several column files of the same shape, one after another. */
 export function concatColumns<T extends object>(files: T[]): T {
+  if (!files.length) throw new Error('No files to join')
   if (files.length === 1) return files[0]
-  const keys = Object.keys(files[0] ?? {}) as (keyof T)[]
+  const keys = Object.keys(files[0]).sort().join(',')
+  for (const f of files) {
+    if (Object.keys(f).sort().join(',') !== keys) throw new Error('Files have different columns')
+  }
   return Object.fromEntries(
-    keys.map((k) => [k, files.flatMap((f) => f[k] as unknown as unknown[])]),
+    Object.keys(files[0]).map((k) => [k, files.flatMap((f) => f[k as keyof T] as unknown[])]),
   ) as T
 }
 
 export function selectData(source: DataSource, selection: Selection): Datasets {
   const codes = selection.marketplaces
+  if (!codes.length) throw new Error('Choose at least one marketplace')
   const wanted = new Set(codes)
   const memo = new Map<string, Promise<unknown>>()
   const once =
@@ -85,7 +90,7 @@ export function selectData(source: DataSource, selection: Selection): Datasets {
     return toUsd(file, money, await rates())
   }
   const each = <T extends object>(get: (m: MarketplaceCode) => Promise<T>): Promise<T> =>
-    Promise.all(codes.map((m) => get(m))).then((files) => concatColumns<T>(files))
+    Promise.all(codes.map(get)).then((files) => concatColumns<T>(files))
 
   return {
     manifest: () => source.manifest(),
@@ -107,19 +112,22 @@ export function selectData(source: DataSource, selection: Selection): Datasets {
       return inCurrency(filtered, ['sales', 'ad_spend', 'ad_sales'])
     }),
     salesDaily: once('salesDaily', async () =>
-      inCurrency(await each<SalesDaily>(source.salesDaily), ['sales']),
+      inCurrency(await each<SalesDaily>((m) => source.salesDaily(m)), ['sales']),
     ),
     adsCampaignDaily: once('adsCampaignDaily', async () =>
-      inCurrency(await each<AdsCampaignDaily>(source.adsCampaignDaily), ['cost', 'sales']),
+      inCurrency(await each<AdsCampaignDaily>((m) => source.adsCampaignDaily(m)), [
+        'cost',
+        'sales',
+      ]),
     ),
     adsProductDaily: once('adsProductDaily', async () =>
-      inCurrency(await each<AdsProductDaily>(source.adsProductDaily), ['cost', 'sales']),
+      inCurrency(await each<AdsProductDaily>((m) => source.adsProductDaily(m)), ['cost', 'sales']),
     ),
     adsTargetDaily: once('adsTargetDaily', async () =>
-      inCurrency(await each<AdsTargetDaily>(source.adsTargetDaily), ['cost', 'sales']),
+      inCurrency(await each<AdsTargetDaily>((m) => source.adsTargetDaily(m)), ['cost', 'sales']),
     ),
     profitDaily: once('profitDaily', async () =>
-      inCurrency(await each<ProfitDaily>(source.profitDaily), [
+      inCurrency(await each<ProfitDaily>((m) => source.profitDaily(m)), [
         'principal',
         'refunds',
         'referral_fees',
@@ -135,7 +143,7 @@ export function selectData(source: DataSource, selection: Selection): Datasets {
             .map((m) => m.network),
         ),
       ]
-      return concatColumns(await Promise.all(networks.map(source.inventoryDaily)))
+      return concatColumns(await Promise.all(networks.map((n) => source.inventoryDaily(n))))
     }),
   }
 }

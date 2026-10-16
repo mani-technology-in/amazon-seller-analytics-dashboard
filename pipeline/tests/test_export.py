@@ -14,16 +14,16 @@ from models import build
 
 MARKETPLACES = ["CA", "DE", "FR", "MX", "UK", "US"]
 NETWORKS = ["CA", "EU", "MX", "UK", "US"]
-# What the default view (the US marketplace) downloads first.
+# What the Overview page downloads today (the US marketplace in USD).
 FIRST_LOAD = [
     "manifest.json",
     "products.json",
     "campaigns.json",
     "marketplaces.json",
     "fx_monthly.json",
-    "overview_daily.json",
     "mkt/US/sales_daily.json",
     "mkt/US/ads_campaign_daily.json",
+    "mkt/US/ads_product_daily.json",
 ]
 
 
@@ -156,7 +156,7 @@ def test_fact_files_match_the_marts_for_every_marketplace(exported, name, mart, 
 def test_size_budget(exported):
     """CR-1 design budget: the first load under about 300 KB of data compressed; the biggest
     single file (one marketplace's keywords, loaded on the Advertising page) under about 1.5 MB;
-    all six marketplaces at once (the heaviest choice a visitor can make) under 2 MB per page."""
+    each data file for all six marketplaces at once (the heaviest choice) under 2 MB."""
     out, _ = exported
     first = sum(_gzip_kb(out / name) for name in FIRST_LOAD)
     assert first < 300, f"first load {first:.0f} KB"

@@ -132,17 +132,12 @@ def _payload(cur, name: str):
 
 def export(out: Path = DEFAULT_OUT) -> dict[str, int]:
     """Write every file plus manifest.json into `out`; returns rows per file (by path)."""
-    out.mkdir(parents=True, exist_ok=True)
-    # Clear the previous export, so a file that is no longer made (such as the single
-    # sales_daily.json of schema 2) cannot linger and be deployed.
-    for old in [*out.glob("*.json"), *out.glob("mkt/*/*.json"), *out.glob("net/*/*.json")]:
-        old.unlink()
+    files: dict[str, object] = {}  # path -> payload, all read before anything is written
     counts = {}
     with connect() as conn, conn.cursor() as cur:
         for name, query in FILES.items():
             cur.execute(query)
-            payload, counts[name] = _payload(cur, name)
-            _write(out / name, payload)
+            files[name], counts[name] = _payload(cur, name)
 
         cur.execute("SELECT marketplace FROM marts.dim_marketplace ORDER BY marketplace")
         parts = {"mkt": [r[0] for r in cur.fetchall()]}
@@ -153,27 +148,31 @@ def export(out: Path = DEFAULT_OUT) -> dict[str, int]:
                 path = f"{kind}/{part}/{name}"
                 # every marketplace gets every file, empty where it has no rows (no ads in CA)
                 cur.execute(query, {"part": part})
-                payload, counts[path] = _payload(cur, name)
-                (out / kind / part).mkdir(parents=True, exist_ok=True)
-                _write(out / path, payload)
+                files[path], counts[path] = _payload(cur, name)
 
         cur.execute("SELECT min(date), max(date) FROM marts.dim_date")
         start, end = cur.fetchone()
 
-    _write(
-        out / "manifest.json",
-        {
-            "schemaVersion": SCHEMA_VERSION,
-            "synthetic": True,
-            "brand": "Demo Brand",
-            "marketplace": "US",
-            "currency": "USD",
-            "dataStart": start.isoformat(),
-            "dataEnd": end.isoformat(),
-            "generatedAt": datetime.now(UTC).replace(microsecond=0).isoformat(),
-            "files": {name: {"rows": n} for name, n in counts.items()},
-        },
-    )
+    files["manifest.json"] = {
+        "schemaVersion": SCHEMA_VERSION,
+        "synthetic": True,
+        "brand": "Demo Brand",
+        "marketplace": "US",
+        "currency": "USD",
+        "dataStart": start.isoformat(),
+        "dataEnd": end.isoformat(),
+        "generatedAt": datetime.now(UTC).replace(microsecond=0).isoformat(),
+        "files": {name: {"rows": n} for name, n in counts.items()},
+    }
+
+    # Only now clear the previous export (a failed query above leaves it as it was), so a file
+    # that is no longer made, such as the single sales_daily.json of schema 2, is not deployed.
+    out.mkdir(parents=True, exist_ok=True)
+    for old in [*out.glob("*.json"), *out.glob("mkt/*/*.json"), *out.glob("net/*/*.json")]:
+        old.unlink()
+    for path, payload in files.items():
+        (out / path).parent.mkdir(parents=True, exist_ok=True)
+        _write(out / path, payload)
     return counts
 
 

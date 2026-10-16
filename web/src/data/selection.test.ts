@@ -104,4 +104,21 @@ describe('concatColumns', () => {
     })
     expect(concatColumns([a])).toBe(a)
   })
+
+  it('refuses no files, or files whose columns differ, rather than joining them wrongly', () => {
+    expect(() => concatColumns([])).toThrow('No files')
+    expect(() => concatColumns([{ x: [1] }, { y: [2] }] as object[])).toThrow('different columns')
+  })
+
+  it('joins empty files (no ads in a marketplace) without adding rows', () => {
+    expect(concatColumns([{ x: [1] }, { x: [] }])).toEqual({ x: [1] })
+  })
+})
+
+describe('selectData', () => {
+  it('refuses an empty choice of marketplaces', () => {
+    expect(() => selectData(source().ds, { marketplaces: [], currency: 'usd' })).toThrow(
+      'at least one marketplace',
+    )
+  })
 })
