@@ -1,17 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
-import { StaticJsonDataSource, marketplaceView } from './dataSource'
-
-function fakeFetch(files: Record<string, unknown>) {
-  return vi.fn(async (url: string) => {
-    const name = url.split('/').pop()!
-    const body = files[name]
-    return {
-      ok: body !== undefined,
-      status: body === undefined ? 404 : 200,
-      json: async () => body,
-    }
-  })
-}
+import { describe, expect, it } from 'vitest'
+import { StaticJsonDataSource } from './dataSource'
+import { fakeFetch } from './fakeFetch'
 
 describe('StaticJsonDataSource', () => {
   it('loads each file once and reuses it', async () => {
@@ -23,43 +12,33 @@ describe('StaticJsonDataSource', () => {
     expect(fetch).toHaveBeenCalledWith('/data/products.json')
   })
 
+  it('reads fact files per marketplace, and inventory per fulfilment network', async () => {
+    const fetch = fakeFetch({
+      'mkt/DE/sales_daily.json': { sales: [1] },
+      'net/EU/inventory_daily.json': { available: [2] },
+    })
+    const ds = new StaticJsonDataSource('/data/', fetch)
+    expect(await ds.salesDaily('DE')).toEqual({ sales: [1] })
+    expect(await ds.inventoryDaily('EU')).toEqual({ available: [2] })
+    expect(fetch.mock.calls.map((c) => c[0])).toEqual([
+      '/data/mkt/DE/sales_daily.json',
+      '/data/net/EU/inventory_daily.json',
+    ])
+  })
+
   it('reports a missing file and retries on the next call', async () => {
     const fetch = fakeFetch({})
     const ds = new StaticJsonDataSource('/data/', fetch)
-    await expect(ds.salesDaily()).rejects.toThrow('sales_daily.json (HTTP 404)')
-    await expect(ds.salesDaily()).rejects.toThrow()
+    await expect(ds.salesDaily('US')).rejects.toThrow('mkt/US/sales_daily.json (HTTP 404)')
+    await expect(ds.salesDaily('US')).rejects.toThrow()
     expect(fetch).toHaveBeenCalledTimes(2)
   })
 
-  it('refuses data with another schema version (1.0 files have no marketplace column)', async () => {
+  it('refuses data with another schema version (2.x files are not split by marketplace)', async () => {
     const ds = new StaticJsonDataSource(
       '/data/',
-      fakeFetch({ 'manifest.json': { schemaVersion: 1 } }),
+      fakeFetch({ 'manifest.json': { schemaVersion: 2 } }),
     )
-    await expect(ds.manifest()).rejects.toThrow('Unsupported data schema version 1')
-  })
-
-  it('a marketplace view shows one marketplace in every file', async () => {
-    const files = {
-      'marketplaces.json': [
-        { marketplace: 'US', network: 'US' },
-        { marketplace: 'DE', network: 'EU' },
-        { marketplace: 'FR', network: 'EU' },
-      ],
-      'campaigns.json': [
-        { campaign_id: '1', marketplace: 'US' },
-        { campaign_id: '2', marketplace: 'DE' },
-      ],
-      'sales_daily.json': {
-        date: ['d', 'd', 'd'],
-        marketplace: ['US', 'DE', 'FR'],
-        sales: [1, 2, 3],
-      },
-      'inventory_daily.json': { date: ['d', 'd'], network: ['US', 'EU'], available: [5, 6] },
-    }
-    const de = marketplaceView(new StaticJsonDataSource('/data/', fakeFetch(files)), 'DE')
-    expect((await de.campaigns()).map((c) => c.campaign_id)).toEqual(['2'])
-    expect((await de.salesDaily()).sales).toEqual([2])
-    expect((await de.inventoryDaily()).available).toEqual([6]) // Germany sells from the EU pool
+    await expect(ds.manifest()).rejects.toThrow('Unsupported data schema version 2')
   })
 })

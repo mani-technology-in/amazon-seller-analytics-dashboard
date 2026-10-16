@@ -8,21 +8,10 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type {
-  AdsCampaignDaily,
-  AdsProductDaily,
-  AdsTargetDaily,
-  Campaign,
-  FxMonthly,
-  InventoryDaily,
-  Marketplace,
-  Product,
-  ProfitDaily,
-  SalesDaily,
-  Target,
-} from '../data/types'
-import { FxRates, toUsd } from './currency'
-import { forMarketplaces, forNetworks, marketplaceShares } from './marketplace'
+import { StaticJsonDataSource } from '../data/dataSource'
+import { selectData } from '../data/selection'
+import type { MarketplaceCode } from '../data/types'
+import { MARKETPLACE_CODES, marketplaceShares } from './marketplace'
 import { accountProfit, marketplaceProfitRows, productProfitRows } from './profit'
 import { previousPeriod } from './dates'
 import {
@@ -45,6 +34,52 @@ if (process.env.REQUIRE_PARITY === '1' && !available) {
 }
 
 const read = <T>(name: string): T => JSON.parse(readFileSync(resolve(DATA_DIR, name), 'utf-8'))
+
+/** Answers the data source's requests from the files on disk. */
+const diskFetch = async (url: string) => {
+  const path = resolve(DATA_DIR, url.split('/data/')[1])
+  const ok = existsSync(path)
+  return {
+    ok,
+    status: ok ? 200 : 404,
+    json: async () => (ok ? read<unknown>(url.split('/data/')[1]) : null),
+  }
+}
+
+async function loadSelection(marketplaces: MarketplaceCode[]) {
+  const d = selectData(new StaticJsonDataSource('/data/', diskFetch), {
+    marketplaces,
+    currency: 'usd',
+  })
+  const [sales, adsCampaign, adsProduct, adsTarget, inventory, products, campaigns, targets] =
+    await Promise.all([
+      d.salesDaily(),
+      d.adsCampaignDaily(),
+      d.adsProductDaily(),
+      d.adsTargetDaily(),
+      d.inventoryDaily(),
+      d.products(),
+      d.campaigns(),
+      d.targets(),
+    ])
+  const [profit, overview] = await Promise.all([d.profitDaily(), d.overviewDaily()])
+  return {
+    sales,
+    adsCampaign,
+    adsProduct,
+    adsTarget,
+    inventory,
+    products,
+    campaigns,
+    targets,
+    profit,
+    overview,
+  }
+}
+
+async function loadData() {
+  return { data: await loadSelection(['US']), usd: await loadSelection([...MARKETPLACE_CODES]) }
+}
 
 type Num = number | null
 const MONEY = 0.006 // sums of 2-decimal floats vs exact SQL numeric
@@ -81,54 +116,12 @@ interface Fixture {
   inventory: { asOf: string; rows: Record<string, Record<string, Num | boolean>> }
 }
 
+// The data is read through the same layer the pages use (data/selection.ts): the v1.0
+// metrics on the US marketplace, the CR-1 metrics on every marketplace in USD.
+const { data, usd } = available ? await loadData() : { data: null!, usd: null! }
+
 describe.skipIf(!available)('metrics match SQL on the real data', () => {
   const fx: Fixture = available ? JSON.parse(readFileSync(FIXTURE, 'utf-8')) : null!
-  // The v1.0 metrics run on the US marketplace (as the v1.0 pages show it); the CR-1 metrics
-  // run on every marketplace, converted to USD.
-  const all = available
-    ? {
-        sales: read<SalesDaily>('sales_daily.json'),
-        adsCampaign: read<AdsCampaignDaily>('ads_campaign_daily.json'),
-        adsProduct: read<AdsProductDaily>('ads_product_daily.json'),
-        adsTarget: read<AdsTargetDaily>('ads_target_daily.json'),
-        inventory: read<InventoryDaily>('inventory_daily.json'),
-        products: read<Product[]>('products.json'),
-        campaigns: read<Campaign[]>('campaigns.json'),
-        targets: read<Target[]>('targets.json'),
-        marketplaces: read<Marketplace[]>('marketplaces.json'),
-        fxMonthly: read<FxMonthly>('fx_monthly.json'),
-        profit: read<ProfitDaily>('profit_daily.json'),
-      }
-    : null!
-  const US = new Set(['US'] as const)
-  const data = available
-    ? {
-        ...all,
-        sales: forMarketplaces(all.sales, US),
-        adsCampaign: forMarketplaces(all.adsCampaign, US),
-        adsProduct: forMarketplaces(all.adsProduct, US),
-        adsTarget: forMarketplaces(all.adsTarget, US),
-        inventory: forNetworks(all.inventory, US, all.marketplaces),
-        campaigns: all.campaigns.filter((c) => c.marketplace === 'US'),
-        targets: all.targets.filter((t) => t.marketplace === 'US'),
-      }
-    : null!
-  const usd = available
-    ? (() => {
-        const rates = new FxRates(all.fxMonthly, all.marketplaces)
-        return {
-          sales: toUsd(all.sales, ['sales'], rates),
-          adsCampaign: toUsd(all.adsCampaign, ['cost', 'sales'], rates),
-          adsProduct: toUsd(all.adsProduct, ['cost', 'sales'], rates),
-          profit: toUsd(
-            all.profit,
-            ['principal', 'refunds', 'referral_fees', 'fba_fees', 'product_cost'],
-            rates,
-          ),
-        }
-      })()
-    : null!
-
   const ranges = available ? fx.ranges : []
 
   it.each(ranges.map((r) => [r.name, r] as const))(
@@ -270,7 +263,7 @@ describe.skipIf(!available)('metrics match SQL on the real data', () => {
     '%s: profit for every product, every marketplace and the account, in USD',
     (_, r) => {
       const range = { start: r.start, end: r.end }
-      const rows = productProfitRows(usd.profit, usd.adsProduct, all.products, range)
+      const rows = productProfitRows(usd.profit, usd.adsProduct, usd.products, range)
       expect(rows).toHaveLength(Object.keys(r.productProfit).length)
       for (const p of rows) {
         const exp = r.productProfit[p.asin]
@@ -309,4 +302,32 @@ describe.skipIf(!available)('metrics match SQL on the real data', () => {
         close(a[k], exp[e], MONEY, `${r.name} account ${k}`)
     },
   )
+  it('the overview file matches the sales and ads files, day by day and marketplace by marketplace', () => {
+    const sum = (key: (i: number) => string, n: number, value: (i: number) => number) => {
+      const m = new Map<string, number>()
+      for (let i = 0; i < n; i++) m.set(key(i), (m.get(key(i)) ?? 0) + value(i))
+      return m
+    }
+    const o = usd.overview
+    const at = (i: number) => `${o.date[i]} ${o.marketplace[i]}`
+    const s = usd.sales
+    const sKey = (i: number) => `${s.date[i]} ${s.marketplace[i]}`
+    const c = usd.adsCampaign
+    const cKey = (i: number) => `${c.date[i]} ${c.marketplace[i]}`
+    const checks: [Map<string, number>, (i: number) => number, number][] = [
+      [sum(sKey, s.date.length, (i) => s.sales[i]), (i) => o.sales[i], MONEY],
+      [sum(sKey, s.date.length, (i) => s.orders[i]), (i) => o.orders[i], 0],
+      [sum(sKey, s.date.length, (i) => s.units[i]), (i) => o.units[i], 0],
+      [sum(cKey, c.date.length, (i) => c.cost[i]), (i) => o.ad_spend[i], MONEY],
+      [sum(cKey, c.date.length, (i) => c.sales[i]), (i) => o.ad_sales[i], MONEY],
+    ]
+    expect(o.date.length).toBeGreaterThan(0)
+    for (const [expected, actual, tol] of checks) {
+      for (let i = 0; i < o.date.length; i++) close(actual(i), expected.get(at(i)) ?? 0, tol, at(i))
+      expect(new Set(o.date.map((_, i) => at(i))).size, 'one row per day and marketplace').toBe(
+        o.date.length,
+      )
+    }
+    expect(sum(sKey, s.date.length, () => 1).size).toBeLessThanOrEqual(o.date.length)
+  })
 })
