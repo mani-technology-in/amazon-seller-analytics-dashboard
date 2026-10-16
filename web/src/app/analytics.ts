@@ -3,7 +3,7 @@
  * (persistence "memory"), no session replay, no autocapture, no feature flags, nothing loaded
  * from PostHog's servers (the "no-external" build). The project key comes from the repository
  * variable POSTHOG_KEY at build time; without it analytics is off. It also stays off in
- * automated browsers, so tests never count as visits.
+ * automated browsers and Lighthouse, so tests and speed checks never count as visits.
  */
 type PostHogLike = { capture: (event: string, props?: Record<string, unknown>) => unknown }
 
@@ -15,7 +15,7 @@ let client: Promise<PostHogLike | null> | null = null
 function load(): Promise<PostHogLike | null> {
   if (!client) {
     client =
-      !KEY || navigator.webdriver
+      !KEY || navigator.webdriver || /Chrome-Lighthouse/.test(navigator.userAgent)
         ? Promise.resolve(null)
         : import('posthog-js/dist/module.slim.no-external')
             .then(({ posthog }) => {

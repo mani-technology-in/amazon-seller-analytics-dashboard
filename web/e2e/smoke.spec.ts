@@ -203,27 +203,35 @@ test('Reports: each report downloads a CSV with its row count, and says so (FR-3
   ).toBeDisabled()
 })
 
-test('one anonymous page view per page goes to PostHog EU, with no cookies or storage (D4)', async ({
-  page,
-}) => {
-  test.skip(!process.env.VITE_POSTHOG_KEY, 'this build has no PostHog key, so analytics is off')
-  const events: string[] = []
-  // answer for PostHog, so tests never count as visits
-  await page.route('https://eu.i.posthog.com/**', async (route) => {
-    events.push(route.request().url())
-    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":1}' })
+test.describe('analytics', () => {
+  // PostHog ignores browsers that call themselves headless; look like an ordinary visitor
+  test.use({
+    userAgent:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
   })
-  // analytics stays off in automated browsers; pretend to be a person for this test
-  await page.addInitScript(() =>
-    Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => false }),
-  )
-  await page.goto('/')
-  await expect.poll(() => events.length, { timeout: 15_000 }).toBeGreaterThan(0)
-  expect(events.every((u) => u.startsWith('https://eu.i.posthog.com/'))).toBe(true)
-  expect(await page.context().cookies()).toEqual([])
-  expect(
-    await page.evaluate(() => Object.keys(localStorage).filter((k) => /ph_|posthog/i.test(k))),
-  ).toEqual([])
+
+  test('one anonymous page view per page goes to PostHog EU, with no cookies or storage (D4)', async ({
+    page,
+  }) => {
+    test.skip(!process.env.VITE_POSTHOG_KEY, 'this build has no PostHog key, so analytics is off')
+    const events: string[] = []
+    // answer for PostHog, so tests never count as visits
+    await page.route('https://eu.i.posthog.com/**', async (route) => {
+      events.push(route.request().url())
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":1}' })
+    })
+    // analytics stays off in automated browsers; pretend to be a person for this test
+    await page.addInitScript(() =>
+      Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => false }),
+    )
+    await page.goto('/')
+    await expect.poll(() => events.length, { timeout: 15_000 }).toBeGreaterThan(0)
+    expect(events.every((u) => u.startsWith('https://eu.i.posthog.com/'))).toBe(true)
+    expect(await page.context().cookies()).toEqual([])
+    expect(
+      await page.evaluate(() => Object.keys(localStorage).filter((k) => /ph_|posthog/i.test(k))),
+    ).toEqual([])
+  })
 })
 
 test('old Products links open the Sales page, filters kept (FR-16)', async ({ page }) => {
@@ -306,13 +314,16 @@ test('the security headers are sent and chart tooltips break no CSP rule', async
   expect(headers['strict-transport-security']).toContain('max-age=')
   // left out on purpose: it made Firefox automation miss page loads (#26), see public/_headers
   expect(headers['cross-origin-opener-policy']).toBeUndefined()
-  // let the page finish loading its code before leaving it, or the aborted import is an error
+  // let the page finish loading its code and data before leaving it: WebKit reports aborted
+  // loads as errors
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await expect(page.getByRole('status')).toHaveCount(0, { timeout: 15_000 })
 
   // A product detail page has charts too; open the first product from the table.
   await page.goto('/sales')
   const productPath = await page.locator('tbody a').first().getAttribute('href')
   expect(productPath).toMatch(/^\/sales\/B0/)
+  await expect(page.getByRole('status')).toHaveCount(0, { timeout: 15_000 })
   for (const path of ['/', productPath!]) {
     await page.goto(path)
     await expect(page.getByRole('status')).toHaveCount(0)

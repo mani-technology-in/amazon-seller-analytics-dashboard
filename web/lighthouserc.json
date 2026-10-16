@@ -4,6 +4,7 @@
       "numberOfRuns": 3,
       "settings": {
         "onlyCategories": ["performance", "accessibility", "best-practices"],
+        "blockedUrlPatterns": ["*eu.i.posthog.com*"],
         "chromeFlags": "--no-sandbox --headless=new"
       }
     },

@@ -58,7 +58,9 @@ export function DataTable<T>({
   const [sorting, setSorting] = useState<SortingState>(initialSort ? [initialSort] : [])
   // Long tables draw their first rows and the rest on request: drawing hundreds of rows at once
   // blocks the page (TBT). Sorting and the CSV always cover every row.
-  const [showAll, setShowAll] = useState(false)
+  // "Show all" applies to these rows only: new filters start again from the first rows
+  const [showAllFor, setShowAllFor] = useState<T[] | null>(null)
+  const showAll = showAllFor === rows
 
   const defs = useMemo<ColumnDef<T>[]>(
     () =>
@@ -201,7 +203,7 @@ export function DataTable<T>({
                 <td colSpan={columns.length} className="px-3 py-2">
                   <button
                     type="button"
-                    onClick={() => setShowAll(true)}
+                    onClick={() => setShowAllFor(rows)}
                     className="inline-flex min-h-9 items-center rounded-md px-2 text-small font-semibold text-accent-strong hover:bg-surface-hover"
                   >
                     Show all {ordered.length} rows

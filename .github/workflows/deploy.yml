@@ -160,7 +160,8 @@ jobs:
       # OWASP ZAP baseline: a passive scan of the preview (spider plus header and content
       # checks, no attacks). Any alert of medium risk or higher fails the job.
       - name: ZAP baseline scan (previews only)
-        if: inputs.branch != 'main'
+        # runs even when Lighthouse fails, so every preview gets its security scan
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' && inputs.branch != 'main' }}
         env:
           SITE: ${{ steps.deploy.outputs.url }}
         run: |
