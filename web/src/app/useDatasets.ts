@@ -1,28 +1,41 @@
-import { useContext, useEffect, useState } from 'react'
-import type { DataSource } from '../data/dataSource'
+import { useContext, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import type { Datasets as Source } from '../data/selection'
 import { DataSourceContext } from './dataContext'
+import { selectionFromParams } from './filters'
 
-export function useDataSource(): DataSource {
-  const ds = useContext(DataSourceContext)
-  if (!ds) throw new Error('useDataSource needs a DataSourceProvider')
-  return ds
+/** The data for the marketplaces and currency in the URL (?mkt=, ?cur=). */
+export function useDataSource(): Source {
+  const select = useContext(DataSourceContext)
+  if (!select) throw new Error('useDataSource needs a DataSourceProvider')
+  const [params] = useSearchParams()
+  const sel = selectionFromParams(params)
+  const key = `${sel.marketplaces.join(',')}|${sel.currency}`
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` stands for `sel`
+  return useMemo(() => select(sel), [select, key])
 }
 
 export type Loaded<T> =
   { status: 'loading' } | { status: 'error'; error: Error } | { status: 'ready'; data: T }
 
 type Datasets = {
-  [K in keyof DataSource]: Awaited<ReturnType<DataSource[K]>>
+  [K in keyof Source]: Awaited<ReturnType<Source[K]>>
 }
 
 /**
- * Loads several datasets at once. The data source caches each file, so pages that share files
- * do not download them twice.
+ * Loads several datasets at once, for the chosen marketplaces and currency. Each file is
+ * downloaded once, so pages that share files do not download them twice.
  */
-export function useDatasets<K extends keyof DataSource>(...keys: K[]): Loaded<Pick<Datasets, K>> {
+export function useDatasets<K extends keyof Source>(...keys: K[]): Loaded<Pick<Datasets, K>> {
   const ds = useDataSource()
-  const [state, setState] = useState<Loaded<Pick<Datasets, K>>>({ status: 'loading' })
   const id = keys.join(',')
+  // The result remembers which data it belongs to: after a new choice of marketplace the page
+  // shows the skeleton until those files arrive, never the previous marketplace's numbers.
+  const [state, setState] = useState<{
+    ds: Source
+    id: string
+    loaded: Loaded<Pick<Datasets, K>>
+  } | null>(null)
 
   useEffect(() => {
     let live = true
@@ -31,13 +44,13 @@ export function useDatasets<K extends keyof DataSource>(...keys: K[]): Loaded<Pi
       .then((values) => {
         if (!live) return
         const data = Object.fromEntries(names.map((k, i) => [k, values[i]])) as Pick<Datasets, K>
-        setState({ status: 'ready', data })
+        setState({ ds, id, loaded: { status: 'ready', data } })
       })
-      .catch((error: Error) => live && setState({ status: 'error', error }))
+      .catch((error: Error) => live && setState({ ds, id, loaded: { status: 'error', error } }))
     return () => {
       live = false
     }
   }, [ds, id])
 
-  return state
+  return state && state.ds === ds && state.id === id ? state.loaded : { status: 'loading' }
 }
