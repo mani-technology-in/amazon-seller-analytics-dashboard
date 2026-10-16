@@ -18,12 +18,14 @@ All data is synthetic. It is generated for a fictional brand ("Demo Brand") and 
 
 | Page | What it shows | Requirements |
 | --- | --- | --- |
-| Overview | 8 KPI tiles with change against the previous period; daily sales vs ad spend; daily ACoS and TACoS; top 5 products and campaigns | FR-5 to FR-7 |
-| Advertising | Campaign table; keyword and target table flagging spend with no sales and ACoS above the target; filters for ad type and campaign | FR-8 to FR-10 |
-| Products | Product table (sales, units, sessions, conversion, ad spend, TACoS) and a daily detail page per ASIN | FR-11, FR-12 |
-| Inventory | Available and inbound units, average daily units, days of cover, low-stock and out-of-stock flags | FR-13, FR-14 |
+| Overview | Revenue, orders, units sold and days of cover with change against the previous period; revenue against ad spend; units by marketplace; top 5 products | FR-5 to FR-7, FR-20 |
+| Sales | Six KPI tiles; revenue by marketplace; a marketplace table with share of revenue; the product table with each product's revenue by marketplace, and a daily detail page per ASIN | FR-11, FR-12, FR-21, FR-22 |
+| Advertising | Ad spend, ad sales, ACoS, TACoS and ROAS tiles; the ACoS and TACoS trend against the target; top 5 campaigns; campaign table with marketplace; keyword and target table flagging spend with no sales and ACoS above the target; filters for ad type and campaign | FR-8 to FR-10 |
+| Inventory | Five stock tiles; stock over time for one product and network, with stock-out days marked; one row per product per fulfilment network: available and inbound units, average daily units, days of cover, low-stock and out-of-stock flags | FR-13, FR-14 |
+| Profit | Six profit tiles; a chart from revenue to net profit, one step per cost; product and marketplace profit tables with loss flags and totals | FR-27 to FR-31 |
+| Reports | Four ready-made CSV reports for the current filters, and the exchange rates used | FR-32 |
 
-Every page shares one filter bar (date presets or a custom range, previous-period comparison, target ACoS, low-stock threshold). Filters live in the URL, so any view can be shared. Every table sorts by any column and exports to CSV.
+Every page shares one filter bar (marketplace, US dollars or the marketplace's own currency, date presets or a custom range, previous-period comparison, target ACoS, low-stock threshold). Filters live in the URL, so any view can be shared. Every table sorts by any column and exports to CSV.
 
 ## How it works
 
@@ -45,7 +47,7 @@ PostgreSQL only runs at build time, on your machine or in GitHub Actions. The li
 | `pipeline/export.py` | Writes the marts as JSON files to `web/public/data/` (git-ignored) |
 | `pipeline/sql/` | SQL scripts for the `raw`, `staging` and `marts` schemas |
 | `web/` | React + TypeScript app (Vite, Tailwind CSS), Vitest tests |
-| `web/src/data/` | `DataSource` interface and the static JSON version the demo uses |
+| `web/src/data/` | `DataSource` interface, the static JSON version the demo uses, and the selection layer that joins the chosen marketplaces and converts currency |
 | `web/src/metrics/` | Date ranges and every metric the dashboard shows, with unit and parity tests |
 | `pipeline/parity.py` | The same metrics computed in SQL, for the parity check |
 | `docs/` | Metric definitions, case study and screenshots |
@@ -113,7 +115,7 @@ Each file is loaded into the `raw` schema unchanged (one JSON record per row, wi
 
 Product-level ad spend covers Sponsored Products and Sponsored Display only, because Amazon reports Sponsored Brands spend per campaign. Account totals include all three ad types.
 
-The export writes one compact JSON file per mart (one array per field; Amazon IDs as strings) plus `manifest.json` with the data's date range, `marketplaces.json`, `fx_monthly.json` and `profit_daily.json`. Every file covers all six marketplaces, with a marketplace (inventory: network) column and money in local currency; the dashboard filters and converts to USD itself. Until the pages with the marketplace filter arrive, the pages show the US marketplace, as in v1.0. Opening a page downloads, compressed (gzip level 6, measured with Playwright against a production build on 15 Oct 2026): Overview about 890 KB, Products 770 KB, Inventory 490 KB, Advertising 1,050 KB (code, data and fonts). The data files now hold all six marketplaces while the pages still show the US only; CR-1 PR 6 splits them so each page loads only what it shows.
+The export writes compact JSON files (one array per field; Amazon IDs as strings; money in local currency) plus `manifest.json` with the data's date range. The daily files are split so a page downloads only the marketplaces a visitor picks: `mkt/<code>/` holds one marketplace's sales, ads and profit, `net/<code>/` one fulfilment network's inventory (Germany and France share `net/EU/`), and `overview_daily.json` holds each marketplace's daily totals for the Overview. Shared files: `products.json`, `campaigns.json`, `targets.json`, `marketplaces.json`, `fx_monthly.json`. In the browser, `web/src/data/selection.ts` joins the chosen marketplaces and converts money to USD at each month's rate. Opening a page downloads, compressed (gzip level 6, measured with Playwright against a production build on 16 Oct 2026, code, data and fonts), with all six marketplaces: Overview about 690 KB, Sales 800 KB, Inventory 500 KB, Advertising 1,020 KB; with one marketplace less (Overview for the US about 500 KB).
 
 ## Metrics
 

@@ -2,6 +2,8 @@ import { LineChart } from 'echarts/charts'
 import {
   GridComponent,
   LegendComponent,
+  MarkAreaComponent,
+  MarkLineComponent,
   TooltipComponent,
   type GridComponentOption,
   type LegendComponentOption,
@@ -17,7 +19,15 @@ import { CHART } from '../theme/chart'
 import { chartTooltip, type TooltipItem } from './chartTooltip'
 import { dateLong, dateShort } from '../lib/format'
 
-echarts.use([LineChart, GridComponent, LegendComponent, TooltipComponent, SVGRenderer])
+echarts.use([
+  LineChart,
+  GridComponent,
+  LegendComponent,
+  MarkAreaComponent,
+  MarkLineComponent,
+  TooltipComponent,
+  SVGRenderer,
+])
 
 /** Axis-tooltip params carry `axisValue` (the date), which ECharts' own type leaves out. */
 function toTooltipItem(p: CallbackDataParams): TooltipItem {
@@ -46,6 +56,13 @@ interface TrendChartProps {
   /** formats axis labels and tooltip values; one unit per chart (never two y-axes) */
   format: (v: number | null) => string
   height?: number
+  /** a dashed horizontal threshold, named in the caption under the chart */
+  reference?: { value: number; label: string }
+  /** runs of dates to shade (e.g. out of stock), named in the caption under the chart */
+  bands?: { start: string; end: string }[]
+  bandLabel?: string
+  /** shown under the title, e.g. what the dates mean */
+  note?: string
 }
 
 /**
@@ -53,7 +70,17 @@ interface TrendChartProps {
  * crosshair and every series' value for that day. A plain table of the same numbers sits
  * under the chart for screen readers and for anyone who prefers numbers.
  */
-export function TrendChart({ title, dates, series, format, height = 280 }: TrendChartProps) {
+export function TrendChart({
+  title,
+  dates,
+  series,
+  format,
+  height = 280,
+  reference,
+  bands,
+  bandLabel,
+  note,
+}: TrendChartProps) {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -92,6 +119,8 @@ export function TrendChart({ title, dates, series, format, height = 280 }: Trend
       },
       yAxis: {
         type: 'value',
+        // keep the reference line in view even when every value is below it
+        max: reference ? (e: { max: number }) => Math.max(e.max, reference.value * 1.1) : undefined,
         splitLine: { lineStyle: { color: CHART.grid } },
         axisLabel: { ...CHART.label, formatter: (v: number) => format(v) },
       },
@@ -107,6 +136,30 @@ export function TrendChart({ title, dates, series, format, height = 280 }: Trend
         // an 8% fill under the first series only (ChartPanel in the Design System)
         areaStyle: i === 0 ? { color: CHART.series[0], opacity: 0.08 } : undefined,
         emphasis: { focus: 'series' },
+        ...(i === 0 && reference
+          ? {
+              markLine: {
+                silent: true,
+                symbol: 'none',
+                label: { show: false },
+                lineStyle: { color: CHART.reference, type: 'dashed', width: 1.5 },
+                data: [{ yAxis: reference.value }],
+              },
+            }
+          : {}),
+        ...(i === 0 && bands?.length
+          ? {
+              markArea: {
+                silent: true,
+                itemStyle: { color: CHART.band },
+                // half a day either side, so a one-day band has a width (boundaryGap is off)
+                data: bands.map((b) => [
+                  { xAxis: Math.max(dates.indexOf(b.start) - 0.5, 0) },
+                  { xAxis: Math.min(dates.indexOf(b.end) + 0.5, dates.length - 1) },
+                ]),
+              },
+            }
+          : {}),
       })),
     }
     chart.setOption(option)
@@ -116,12 +169,31 @@ export function TrendChart({ title, dates, series, format, height = 280 }: Trend
       resize.disconnect()
       chart.dispose()
     }
-  }, [dates, series, format])
+  }, [dates, series, format, reference, bands])
 
   return (
     <figure className="min-w-0 rounded-lg border border-surface-sunken bg-surface-page p-4">
-      <figcaption className="mb-2 text-section-title text-ink">{title}</figcaption>
+      <figcaption className="mb-2 text-section-title text-ink">
+        {title}
+        {note ? <span className="block text-caption font-normal text-ink-3">{note}</span> : null}
+      </figcaption>
       <div ref={ref} style={{ height }} role="img" aria-label={title} />
+      {reference || bands?.length ? (
+        <p className="mt-1 flex flex-wrap gap-x-5 gap-y-1 font-mono text-chart-label text-ink-3 uppercase">
+          {reference ? (
+            <span className="flex items-center gap-2">
+              <i aria-hidden="true" className="w-4 border-t-2 border-dashed border-warning" />
+              {reference.label}
+            </span>
+          ) : null}
+          {bands?.length ? (
+            <span className="flex items-center gap-2">
+              <i aria-hidden="true" className="size-3 rounded-[3px] bg-critical-soft" />
+              {bandLabel}
+            </span>
+          ) : null}
+        </p>
+      ) : null}
       <details className="mt-2 text-caption text-ink-2">
         <summary className="cursor-pointer select-none">Show as table</summary>
         <div className="mt-2 max-h-64 overflow-auto">
