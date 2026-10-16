@@ -10,6 +10,12 @@ import { join, relative } from 'node:path'
 const root = process.argv[2] ?? 'test-results'
 const SLOW_MS = 2000
 
+// Error messages carry terminal colour codes and a long call log; keep the first line, plain.
+const firstLine = (m) =>
+  String(m ?? '')
+    .replace(/\u001b\[[0-9;]*m/g, '')
+    .split('\n')[0]
+
 function traces(dir) {
   let out = []
   let entries = []
@@ -26,24 +32,32 @@ function traces(dir) {
   return out
 }
 
-function read(zip, file) {
+/** Every JSON line of the zip's files whose names end with `suffix` (a test runner trace holds
+ * test.trace plus one N-trace.trace / N-trace.network pair per browser context). */
+function read(zip, suffix) {
+  let names = []
   try {
-    return execFileSync('unzip', ['-p', zip, file], { encoding: 'utf-8', maxBuffer: 64 << 20 })
-      .split('\n')
-      .filter(Boolean)
-      .map((l) => JSON.parse(l))
+    names = execFileSync('unzip', ['-Z1', zip], { encoding: 'utf-8' }).split('\n')
   } catch {
     return []
   }
+  return names
+    .filter((n) => n.endsWith(suffix))
+    .flatMap((n) =>
+      execFileSync('unzip', ['-p', zip, n], { encoding: 'utf-8', maxBuffer: 64 << 20 })
+        .split('\n')
+        .filter(Boolean)
+        .map((l) => JSON.parse(l)),
+    )
 }
 
 for (const zip of traces(root)) {
-  const events = read(zip, 'trace.trace')
+  const events = read(zip, '.trace')
   const t0 = events.find((e) => e.type === 'context-options')?.wallTime ?? 0
   const lines = []
   const browser = events.find((e) => e.type === 'context-options')?.browserName ?? '?'
   lines.push(`${relative(root, zip)} (${browser})`)
-  for (const r of read(zip, 'trace.network')) {
+  for (const r of read(zip, '.network')) {
     if (r.type !== 'resource-snapshot') continue
     const s = r.snapshot
     const start = Date.parse(s.startedDateTime) - t0
@@ -55,7 +69,9 @@ for (const zip of traces(root)) {
   }
   for (const e of events) {
     if (e.type === 'log') lines.push(`  log: ${e.message}`)
-    if (e.type === 'after' && e.error) lines.push(`  error: ${e.error.message?.split('\n')[0]}`)
+    if (e.type === 'stdio' || e.type === 'error')
+      lines.push(`  ${e.type}: ${firstLine(e.text ?? e.message)}`)
+    if (e.type === 'after' && e.error) lines.push(`  error: ${firstLine(e.error.message)}`)
     if (e.type === 'console' && e.messageType === 'error') lines.push(`  console error: ${e.text}`)
   }
   // One annotation per trace; GitHub encodes newlines in annotation messages as %0A.
