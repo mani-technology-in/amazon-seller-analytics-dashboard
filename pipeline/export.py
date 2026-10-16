@@ -5,9 +5,10 @@
 Fact files are column-oriented: one array per field, all the same length. Amazon IDs are strings,
 because JavaScript numbers can't hold every 64-bit integer. Money has 2 decimals.
 
-Every file covers all six marketplaces: fact files carry a marketplace column (inventory: the
-fulfilment network) and money in the marketplace's own currency. The dashboard filters by
-marketplace and converts to USD itself (web/src/metrics/marketplace.ts and currency.ts).
+Lookup files cover every marketplace; fact files are split into one file per marketplace
+(mkt/<code>/) or fulfilment network (net/<code>/), so a page downloads only what it shows.
+Fact files keep their marketplace (or network) column and money in the marketplace's own
+currency; the dashboard converts to USD itself (web/src/metrics/currency.ts).
 """
 
 import argparse
@@ -18,10 +19,10 @@ from pathlib import Path
 
 from db import connect
 
-SCHEMA_VERSION = 2  # 2: every marketplace, with a marketplace (or network) column
+SCHEMA_VERSION = 3  # 3: fact files split per marketplace (mkt/<code>/) and network (net/<code>/)
 DEFAULT_OUT = Path(__file__).resolve().parent.parent / "web" / "public" / "data"
 
-# file name -> query; column order in the file follows the query
+# Shared files: file name -> query; column order in the file follows the query.
 FILES = {
     "products.json": """
         SELECT asin, sku, title, category, price, launch_date
@@ -34,35 +35,75 @@ FILES = {
         SELECT campaign_id::text AS campaign_id, marketplace, target_id::text AS target_id,
                ad_product, target_text, match_type
         FROM marts.dim_target ORDER BY campaign_id, target_id""",
-    "sales_daily.json": """
-        SELECT date, marketplace, asin, units, orders, sales, sessions
-        FROM marts.fct_sales_daily ORDER BY date, marketplace, asin""",
-    "ads_campaign_daily.json": """
-        SELECT date, marketplace, campaign_id::text AS campaign_id, impressions, clicks, cost,
-               orders, sales, units
-        FROM marts.fct_ads_campaign_daily ORDER BY date, campaign_id""",
-    "ads_product_daily.json": """
-        SELECT date, marketplace, asin, impressions, clicks, cost, orders, sales
-        FROM marts.fct_ads_product_daily ORDER BY date, marketplace, asin""",
-    "inventory_daily.json": """
-        SELECT date, network, asin, available, reserved, inbound
-        FROM marts.fct_inventory_daily ORDER BY date, network, asin""",
-    "ads_target_daily.json": """
-        SELECT date, marketplace, campaign_id::text AS campaign_id, target_id::text AS target_id,
-               impressions, clicks, cost, orders, sales
-        FROM marts.fct_ads_target_daily
-        WHERE impressions > 0
-        ORDER BY date, campaign_id, target_id""",
     "marketplaces.json": """
         SELECT marketplace, marketplace_id, name, currency, network, has_ads
         FROM marts.dim_marketplace ORDER BY marketplace_id = 'ATVPDKIKX0DER' DESC, name""",
-    "profit_daily.json": """
-        SELECT date, marketplace, asin, units_shipped, principal, refunds, referral_fees,
-               fba_fees, product_cost
-        FROM marts.fct_profit_daily ORDER BY date, marketplace, asin""",
     "fx_monthly.json": """
         SELECT year_month, currency, usd_rate
         FROM marts.dim_fx_monthly WHERE currency <> 'USD' ORDER BY year_month, currency""",
+    # Daily totals per marketplace (sales and every ad type), for the Overview's tiles and
+    # charts without downloading every product's rows.
+    "overview_daily.json": """
+        WITH s AS (
+            SELECT date, marketplace, sum(sales) AS sales, sum(orders)::int AS orders,
+                   sum(units)::int AS units
+            FROM marts.fct_sales_daily GROUP BY 1, 2
+        ), a AS (
+            SELECT date, marketplace, sum(cost) AS ad_spend, sum(sales) AS ad_sales
+            FROM marts.fct_ads_campaign_daily GROUP BY 1, 2
+        )
+        SELECT date, marketplace, coalesce(s.sales, 0) AS sales, coalesce(s.orders, 0) AS orders,
+               coalesce(s.units, 0) AS units, coalesce(a.ad_spend, 0) AS ad_spend,
+               coalesce(a.ad_sales, 0) AS ad_sales
+        FROM s FULL JOIN a USING (date, marketplace)
+        ORDER BY date, marketplace""",
+}
+
+# Fact files written once per marketplace (mkt/<code>/) or fulfilment network (net/<code>/),
+# so a page downloads only the marketplaces it shows. %(part)s is the marketplace or network.
+SPLIT_FILES = {
+    "sales_daily.json": (
+        "mkt",
+        """
+        SELECT date, marketplace, asin, units, orders, sales, sessions
+        FROM marts.fct_sales_daily WHERE marketplace = %(part)s ORDER BY date, asin""",
+    ),
+    "ads_campaign_daily.json": (
+        "mkt",
+        """
+        SELECT date, marketplace, campaign_id::text AS campaign_id, impressions, clicks, cost,
+               orders, sales, units
+        FROM marts.fct_ads_campaign_daily WHERE marketplace = %(part)s
+        ORDER BY date, campaign_id""",
+    ),
+    "ads_product_daily.json": (
+        "mkt",
+        """
+        SELECT date, marketplace, asin, impressions, clicks, cost, orders, sales
+        FROM marts.fct_ads_product_daily WHERE marketplace = %(part)s ORDER BY date, asin""",
+    ),
+    "ads_target_daily.json": (
+        "mkt",
+        """
+        SELECT date, marketplace, campaign_id::text AS campaign_id, target_id::text AS target_id,
+               impressions, clicks, cost, orders, sales
+        FROM marts.fct_ads_target_daily
+        WHERE impressions > 0 AND marketplace = %(part)s
+        ORDER BY date, campaign_id, target_id""",
+    ),
+    "profit_daily.json": (
+        "mkt",
+        """
+        SELECT date, marketplace, asin, units_shipped, principal, refunds, referral_fees,
+               fba_fees, product_cost
+        FROM marts.fct_profit_daily WHERE marketplace = %(part)s ORDER BY date, asin""",
+    ),
+    "inventory_daily.json": (
+        "net",
+        """
+        SELECT date, network, asin, available, reserved, inbound
+        FROM marts.fct_inventory_daily WHERE network = %(part)s ORDER BY date, asin""",
+    ),
 }
 
 # Small lookup files are written as lists of objects; facts as one array per column.
@@ -81,21 +122,40 @@ def _write(path: Path, payload) -> None:
     path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
 
 
+def _payload(cur, name: str):
+    columns = [c.name for c in cur.description]
+    rows = cur.fetchall()
+    if name in ROW_FILES:
+        return [dict(zip(columns, map(_value, r), strict=True)) for r in rows], len(rows)
+    return {c: [_value(r[i]) for r in rows] for i, c in enumerate(columns)}, len(rows)
+
+
 def export(out: Path = DEFAULT_OUT) -> dict[str, int]:
-    """Write every file plus manifest.json into `out`; returns rows per file."""
+    """Write every file plus manifest.json into `out`; returns rows per file (by path)."""
     out.mkdir(parents=True, exist_ok=True)
+    # Clear the previous export, so a file that is no longer made (such as the single
+    # sales_daily.json of schema 2) cannot linger and be deployed.
+    for old in [*out.glob("*.json"), *out.glob("mkt/*/*.json"), *out.glob("net/*/*.json")]:
+        old.unlink()
     counts = {}
     with connect() as conn, conn.cursor() as cur:
         for name, query in FILES.items():
             cur.execute(query)
-            columns = [c.name for c in cur.description]
-            rows = cur.fetchall()
-            if name in ROW_FILES:
-                payload = [dict(zip(columns, map(_value, r), strict=True)) for r in rows]
-            else:
-                payload = {c: [_value(r[i]) for r in rows] for i, c in enumerate(columns)}
+            payload, counts[name] = _payload(cur, name)
             _write(out / name, payload)
-            counts[name] = len(rows)
+
+        cur.execute("SELECT marketplace FROM marts.dim_marketplace ORDER BY marketplace")
+        parts = {"mkt": [r[0] for r in cur.fetchall()]}
+        cur.execute("SELECT DISTINCT network FROM marts.dim_marketplace ORDER BY network")
+        parts["net"] = [r[0] for r in cur.fetchall()]
+        for name, (kind, query) in SPLIT_FILES.items():
+            for part in parts[kind]:
+                path = f"{kind}/{part}/{name}"
+                # every marketplace gets every file, empty where it has no rows (no ads in CA)
+                cur.execute(query, {"part": part})
+                payload, counts[path] = _payload(cur, name)
+                (out / kind / part).mkdir(parents=True, exist_ok=True)
+                _write(out / path, payload)
 
         cur.execute("SELECT min(date), max(date) FROM marts.dim_date")
         start, end = cur.fetchone()
