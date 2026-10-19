@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest'
 import { StaticJsonDataSource } from '../data/dataSource'
 import { selectData } from '../data/selection'
 import type { MarketplaceCode } from '../data/types'
+import { LOCAL_CURRENCY } from '../app/filters'
 import { MARKETPLACE_CODES, marketplaceShares } from './marketplace'
 import { accountProfit, marketplaceProfitRows, productProfitRows } from './profit'
 import { previousPeriod } from './dates'
@@ -329,5 +330,11 @@ describe.skipIf(!available)('metrics match SQL on the real data', () => {
       )
     }
     expect(sum(sKey, s.date.length, () => 1).size).toBeLessThanOrEqual(o.date.length)
+  })
+  it('the app knows the currency of each marketplace, as the data does', () => {
+    const markets = read<{ marketplace: MarketplaceCode; currency: string }[]>('marketplaces.json')
+    expect(Object.fromEntries(markets.map((m) => [m.marketplace, m.currency]))).toEqual(
+      LOCAL_CURRENCY,
+    )
   })
 })

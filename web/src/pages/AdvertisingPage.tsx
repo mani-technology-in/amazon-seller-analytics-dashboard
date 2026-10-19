@@ -7,7 +7,8 @@ import { FilterBar } from '../components/FilterBar'
 import { Flag } from '../components/Flag'
 import { ErrorBox, Loading, PageTitle } from '../components/Layout'
 import type { Manifest } from '../data/types'
-import { count, money, moneyCents, multiple, pct } from '../lib/format'
+import { useMoney } from '../app/money'
+import { count, multiple, pct } from '../lib/format'
 import {
   campaignRows,
   targetKey,
@@ -28,6 +29,7 @@ const MATCH_LABELS: Record<string, string> = {
 export function AdvertisingPage() {
   const manifest = useOutletContext<Manifest>()
   const { filters, update } = useFilters(manifest.dataStart, manifest.dataEnd)
+  const { money, moneyCents } = useMoney()
   const base = useDatasets('adsCampaignDaily', 'campaigns')
   const keywords = useDatasets('adsTargetDaily', 'targets', 'campaigns')
   const [flaggedOnly, setFlaggedOnly] = useState(false)

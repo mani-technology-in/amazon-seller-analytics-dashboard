@@ -12,6 +12,8 @@ import type {
   Campaign,
   ISODate,
   InventoryDaily,
+  MarketplaceCode,
+  NetworkCode,
   Product,
   SalesDaily,
   Target,
@@ -307,6 +309,7 @@ export function productRows(
 
 export interface InventoryRow extends Product {
   date: ISODate
+  network: NetworkCode
   available: number
   reserved: number
   inbound: number
@@ -327,12 +330,17 @@ export function inventoryRows(
   products: Product[],
   asOf: ISODate,
   lowStockDays = DEFAULT_LOW_STOCK_DAYS,
+  /** each marketplace's fulfilment network: each network's stock is set against the sales of
+   * the marketplaces it serves (FR-13, FR-14). Without it every sale counts against every row. */
+  networkOf?: Map<MarketplaceCode, NetworkCode>,
 ): InventoryRow[] {
   const window = { start: addDays(asOf, -(AVG_UNITS_WINDOW_DAYS - 1)), end: asOf }
+  const key = (network: string, asin: string) => (networkOf ? `${network} ${asin}` : asin)
   const units = new Map<string, number>()
   for (let i = 0; i < sales.date.length; i++) {
     if (!inRange(sales.date[i], window)) continue
-    units.set(sales.asin[i], (units.get(sales.asin[i]) ?? 0) + sales.units[i])
+    const k = key(networkOf?.get(sales.marketplace[i]) ?? '', sales.asin[i])
+    units.set(k, (units.get(k) ?? 0) + sales.units[i])
   }
   const byAsin = new Map(products.map((p) => [p.asin, p]))
   const rows: InventoryRow[] = []
@@ -341,12 +349,14 @@ export function inventoryRows(
     const p = byAsin.get(inventory.asin[i])
     if (!p) continue
     const available = inventory.available[i]
-    const avgDailyUnits = (units.get(p.asin) ?? 0) / AVG_UNITS_WINDOW_DAYS
+    const avgDailyUnits =
+      (units.get(key(inventory.network[i], p.asin)) ?? 0) / AVG_UNITS_WINDOW_DAYS
     const daysOfCover = ratio(available, avgDailyUnits)
     const outOfStock = available <= 0
     rows.push({
       ...p,
       date: asOf,
+      network: inventory.network[i],
       available,
       reserved: inventory.reserved[i],
       inbound: inventory.inbound[i],

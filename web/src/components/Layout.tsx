@@ -5,11 +5,10 @@ import { useReduceMotion } from '../app/motion'
 import { dateLong } from '../lib/format'
 import { ReduceMotionSwitch } from './ReduceMotionSwitch'
 
-// The website's page order; Products stands where Sales will go, and Sales, Profit and
-// Reports join this list with their pages (CR-1 PR 6 and PR 8).
+// The website's page order; Profit and Reports join this list with their pages (CR-1 PR 8).
 const NAV = [
   { to: '/', label: 'Overview', end: true },
-  { to: '/products', label: 'Products' },
+  { to: '/sales', label: 'Sales' },
   { to: '/inventory', label: 'Inventory' },
   { to: '/advertising', label: 'Advertising' },
 ]
@@ -45,7 +44,7 @@ export function Layout() {
           </div>
           <div>
             <div className="font-semibold">{brand}</div>
-            <div className="text-caption text-ink-3">Seller workspace · Amazon US</div>
+            <div className="text-caption text-ink-3">Seller workspace</div>
           </div>
         </div>
         <nav aria-label="Pages">

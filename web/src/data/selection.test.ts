@@ -88,6 +88,22 @@ describe('choosing marketplaces and currency (FR-17, FR-18)', () => {
     expect(o.orders).toEqual([2, 1])
   })
 
+  it('stock sales cover every marketplace a chosen network serves (France shares EU stock)', async () => {
+    const fr = { ...files, 'mkt/DE/sales_daily.json': files['mkt/UK/sales_daily.json'] }
+    const fetch = fakeFetch({
+      ...fr,
+      'mkt/FR/sales_daily.json': { ...files['mkt/US/sales_daily.json'], marketplace: ['FR'] },
+    })
+    const data = selectData(new StaticJsonDataSource('/data/', fetch), {
+      marketplaces: ['FR'],
+      currency: 'local',
+    })
+    const urls = () => fetch.mock.calls.map((c) => c[0])
+    expect((await data.stockSalesDaily()).units).toEqual([1, 1, 6]) // DE then FR
+    expect(urls()).toContain('/data/mkt/DE/sales_daily.json')
+    expect((await data.salesDaily()).units).toEqual([6]) // the pages still show France only
+  })
+
   it('campaigns are filtered; inventory comes from each chosen fulfilment network once', async () => {
     const data = selectData(source().ds, { marketplaces: ['US', 'DE', 'FR'], currency: 'usd' })
     expect((await data.campaigns()).map((c) => c.campaign_id)).toEqual(['1', '2'])

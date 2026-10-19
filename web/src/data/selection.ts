@@ -36,6 +36,11 @@ export interface Datasets {
   adsTargetDaily(): Promise<AdsTargetDaily>
   profitDaily(): Promise<ProfitDaily>
   inventoryDaily(): Promise<InventoryDaily>
+  /**
+   * Sales of every marketplace served by the chosen fulfilment networks: Germany's stock is
+   * also France's, so days of cover needs both. Money is NOT converted; use it for units only.
+   */
+  stockSalesDaily(): Promise<SalesDaily>
 }
 
 export interface Selection {
@@ -144,6 +149,14 @@ export function selectData(source: DataSource, selection: Selection): Datasets {
         ),
       ]
       return concatColumns(await Promise.all(networks.map((n) => source.inventoryDaily(n))))
+    }),
+    stockSalesDaily: once('stockSalesDaily', async () => {
+      const markets = await source.marketplaces()
+      const networks = new Set(
+        markets.filter((m) => wanted.has(m.marketplace)).map((m) => m.network),
+      )
+      const served = markets.filter((m) => networks.has(m.network)).map((m) => m.marketplace)
+      return concatColumns(await Promise.all(served.map((m) => source.salesDaily(m))))
     }),
   }
 }

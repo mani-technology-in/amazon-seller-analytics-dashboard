@@ -18,6 +18,15 @@ export const MARKETPLACE_CODES: readonly MarketplaceCode[] = ['US', 'CA', 'MX', 
 
 export type MarketplaceChoice = 'all' | MarketplaceCode
 
+export const MARKETPLACE_NAMES: Record<MarketplaceCode, string> = {
+  US: 'United States',
+  CA: 'Canada',
+  MX: 'Mexico',
+  UK: 'United Kingdom',
+  DE: 'Germany',
+  FR: 'France',
+}
+
 export function selectedCodes(choice: MarketplaceChoice): Set<MarketplaceCode> {
   return new Set(choice === 'all' ? MARKETPLACE_CODES : [choice])
 }
