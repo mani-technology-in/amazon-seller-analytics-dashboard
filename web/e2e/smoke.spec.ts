@@ -324,7 +324,10 @@ test('the security headers are sent and chart tooltips break no CSP rule', async
   expect(headers['content-security-policy']).toContain(
     "script-src 'self' https://static.cloudflareinsights.com;",
   )
-  expect(headers['content-security-policy']).toContain("style-src 'self'")
+  // stylesheets only from our own files; style attributes allowed (charts size their elements)
+  expect(headers['content-security-policy']).toContain(
+    "style-src 'self'; style-src-attr 'unsafe-inline';",
+  )
   expect(headers['content-security-policy']).toContain("frame-ancestors 'none'")
   expect(headers['x-content-type-options']).toBe('nosniff')
   expect(headers['referrer-policy']).toBe('strict-origin-when-cross-origin')

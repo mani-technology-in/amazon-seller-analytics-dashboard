@@ -2,11 +2,15 @@
 # adds its beacon script to demo.manitechnology.com, so its two addresses are allowed; nothing else is.
 # No Cross-Origin-Opener-Policy: it is not in the MT header list, and in CI it made Firefox (via
 # Playwright) miss the page-ready signal on a test's first navigation (issue #26).
+# style-src-attr 'unsafe-inline' lets elements set their own size and position (style
+# attributes), which the charts do; <style> blocks and stylesheets from elsewhere stay blocked.
+# WebKit in Playwright 1.64 started refusing those writes (Chromium and Firefox never did); SAM
+# approved this on 19 Oct 2026 (#41).
 # "! Access-Control-Allow-Origin" removes the "*" Cloudflare Pages adds by default: no other site
 # needs to read these files, and ZAP rates the wildcard a medium risk (Cross-Domain Misconfiguration).
 /*
   ! Access-Control-Allow-Origin
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self' https://cloudflareinsights.com https://eu.i.posthog.com; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self' https://cloudflareinsights.com https://eu.i.posthog.com; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'
   Strict-Transport-Security: max-age=31536000
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
