@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { useFilters } from '../app/filters'
 import { useMoney } from '../app/money'
-import { useDatasets } from '../app/useDatasets'
+import { useDatasets, useDatasetsAfter } from '../app/useDatasets'
 import { DataTable, type Column } from '../components/DataTable'
 import { FilterBar } from '../components/FilterBar'
 import { KpiTile } from '../components/KpiTile'
@@ -37,8 +37,11 @@ export function OverviewPage() {
   const manifest = useOutletContext<Manifest>()
   const { filters, update } = useFilters(manifest.dataStart, manifest.dataEnd)
   const m = useMoney()
-  const data = useDatasets(
-    'overviewDaily',
+  // The tiles and charts come from one small file, so they show first; stock cover and the
+  // top products need every marketplace's product sales and follow (LCP, NFR).
+  const fast = useDatasets('overviewDaily')
+  const slow = useDatasetsAfter(
+    fast.status !== 'loading',
     'salesDaily',
     'stockSalesDaily',
     'inventoryDaily',
@@ -46,21 +49,32 @@ export function OverviewPage() {
   )
 
   const view = useMemo(() => {
-    if (data.status !== 'ready') return null
-    const d = data.data
+    if (fast.status !== 'ready') return null
+    const o = fast.data.overviewDaily
     const { range, previous } = filters
-    const totals = overviewTotals(d.overviewDaily, range)
-    const prev = previous ? overviewTotals(d.overviewDaily, previous) : null
+    const daily = new Map(daysOf(range).map((day) => [day, 0]))
+    for (let i = 0; i < o.date.length; i++) {
+      const day = o.date[i]
+      if (daily.has(day)) daily.set(day, daily.get(day)! + o.sales[i])
+    }
+    return {
+      totals: overviewTotals(o, range),
+      prev: previous ? overviewTotals(o, previous) : null,
+      spark: [...daily.values()],
+      weekly: rangeLength(range) > 60,
+      chart: revenueAndSpend(o, range),
+      units: unitsByMarketplace(o, range),
+    }
+  }, [fast, filters])
+
+  const stockView = useMemo(() => {
+    if (slow.status !== 'ready') return null
+    const d = slow.data
+    const { range, previous } = filters
     const stock = stockCover(d.inventoryDaily, d.stockSalesDaily, range.end)
     const prevStock = previous
       ? stockCover(d.inventoryDaily, d.stockSalesDaily, previous.end)
       : null
-    const chart = revenueAndSpend(d.overviewDaily, range)
-    const daily = new Map(daysOf(range).map((day) => [day, 0]))
-    for (let i = 0; i < d.overviewDaily.date.length; i++) {
-      const day = d.overviewDaily.date[i]
-      if (daily.has(day)) daily.set(day, daily.get(day)! + d.overviewDaily.sales[i])
-    }
     // productRows needs ads only for its ad columns, which this table does not show
     const noAds = {
       date: [],
@@ -83,18 +97,13 @@ export function OverviewPage() {
       cover: stock.byAsin.get(r.asin)?.daysOfCover ?? null,
     }))
     return {
-      totals,
-      prev,
       cover: stock.total.daysOfCover,
       prevCover: prevStock ? prevStock.total.daysOfCover : null,
-      spark: [...daily.values()],
-      weekly: rangeLength(range) > 60,
-      chart,
-      units: unitsByMarketplace(d.overviewDaily, range),
       top,
     }
-  }, [data, filters])
+  }, [slow, filters])
 
+  const data = fast.status === 'error' ? fast : slow
   if (data.status === 'error') return <ErrorBox error={data.error} />
 
   const t = view?.totals
@@ -142,9 +151,15 @@ export function OverviewPage() {
             />
             <KpiTile
               label="Days of cover"
-              value={view.cover === null ? '–' : count(Math.round(view.cover))}
-              current={view.cover}
-              previous={prev(view.prevCover)}
+              value={
+                !stockView
+                  ? null
+                  : stockView.cover === null
+                    ? '–'
+                    : count(Math.round(stockView.cover))
+              }
+              current={stockView?.cover ?? null}
+              previous={stockView ? prev(stockView.prevCover) : undefined}
               better="neutral"
               hint="Stock available on the last day ÷ average units sold per day over the 30 days to it"
             />
@@ -177,52 +192,56 @@ export function OverviewPage() {
             />
           </div>
 
-          <DataTable<TopRow>
-            title="Top 5 products by revenue"
-            rows={view.top}
-            rowKey={(r) => r.asin}
-            csvName="top-products.csv"
-            initialSort={{ id: 'revenue', desc: true }}
-            columns={
-              [
-                {
-                  id: 'title',
-                  header: 'Product',
-                  value: (r) => r.title,
-                  cell: (r) => (
-                    <Link
-                      className="text-accent-strong hover:underline"
-                      to={{ pathname: `/sales/${r.asin}`, search: location.search }}
-                    >
-                      {r.title.replace('Demo Brand ', '')}
-                    </Link>
-                  ),
-                },
-                {
-                  id: 'orders',
-                  header: 'Orders',
-                  value: (r) => r.orders,
-                  cell: (r) => count(r.orders),
-                  align: 'right',
-                },
-                {
-                  id: 'revenue',
-                  header: `Revenue (${m.currency})`,
-                  value: (r) => r.revenue,
-                  cell: (r) => m.money(r.revenue),
-                  align: 'right',
-                },
-                {
-                  id: 'cover',
-                  header: 'Cover',
-                  value: (r) => r.cover,
-                  cell: (r) => cover(r.cover),
-                  align: 'right',
-                  hint: 'Days of stock left at the recent rate of sales, across the chosen fulfilment networks',
-                },
-              ] satisfies Column<TopRow>[]
-            }
-          />
+          {!stockView ? (
+            <Loading what="top products" />
+          ) : (
+            <DataTable<TopRow>
+              title="Top 5 products by revenue"
+              rows={stockView.top}
+              rowKey={(r) => r.asin}
+              csvName="top-products.csv"
+              initialSort={{ id: 'revenue', desc: true }}
+              columns={
+                [
+                  {
+                    id: 'title',
+                    header: 'Product',
+                    value: (r) => r.title,
+                    cell: (r) => (
+                      <Link
+                        className="text-accent-strong hover:underline"
+                        to={{ pathname: `/sales/${r.asin}`, search: location.search }}
+                      >
+                        {r.title.replace('Demo Brand ', '')}
+                      </Link>
+                    ),
+                  },
+                  {
+                    id: 'orders',
+                    header: 'Orders',
+                    value: (r) => r.orders,
+                    cell: (r) => count(r.orders),
+                    align: 'right',
+                  },
+                  {
+                    id: 'revenue',
+                    header: `Revenue (${m.currency})`,
+                    value: (r) => r.revenue,
+                    cell: (r) => m.money(r.revenue),
+                    align: 'right',
+                  },
+                  {
+                    id: 'cover',
+                    header: 'Cover',
+                    value: (r) => r.cover,
+                    cell: (r) => cover(r.cover),
+                    align: 'right',
+                    hint: 'Days of stock left at the recent rate of sales, across the chosen fulfilment networks',
+                  },
+                ] satisfies Column<TopRow>[]
+              }
+            />
+          )}
         </>
       )}
     </>

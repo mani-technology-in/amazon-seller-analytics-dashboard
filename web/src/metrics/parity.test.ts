@@ -13,7 +13,12 @@ import { selectData } from '../data/selection'
 import type { MarketplaceCode } from '../data/types'
 import { LOCAL_CURRENCY } from '../app/filters'
 import { MARKETPLACE_CODES, marketplaceShares } from './marketplace'
-import { accountProfit, marketplaceProfitRows, productProfitRows } from './profit'
+import {
+  accountProfit,
+  accountProfitFromSummary,
+  marketplaceProfitRows,
+  productProfitRows,
+} from './profit'
 import { previousPeriod } from './dates'
 import {
   accountKpis,
@@ -63,7 +68,11 @@ async function loadSelection(marketplaces: MarketplaceCode[]) {
       d.campaigns(),
       d.targets(),
     ])
-  const [profit, overview] = await Promise.all([d.profitDaily(), d.overviewDaily()])
+  const [profit, overview, profitSummary] = await Promise.all([
+    d.profitDaily(),
+    d.overviewDaily(),
+    d.profitSummaryDaily(),
+  ])
   return {
     sales,
     adsCampaign,
@@ -75,6 +84,7 @@ async function loadSelection(marketplaces: MarketplaceCode[]) {
     targets,
     profit,
     overview,
+    profitSummary,
   }
 }
 
@@ -299,8 +309,12 @@ describe.skipIf(!available)('metrics match SQL on the real data', () => {
         ['adSpend', 'ad_spend'],
         ['productCost', 'product_cost'],
         ['netProfit', 'net_profit'],
-      ] as const)
+      ] as const) {
         close(a[k], exp[e], MONEY, `${r.name} account ${k}`)
+        // the Profit page's tiles and chart read the two pre-totalled files
+        const quick = accountProfitFromSummary(usd.profitSummary, usd.overview, range)
+        close(quick[k], exp[e], MONEY, `${r.name} account ${k} from the summary files`)
+      }
     },
   )
   it('the overview file matches the sales and ads files, day by day and marketplace by marketplace', () => {
@@ -319,6 +333,7 @@ describe.skipIf(!available)('metrics match SQL on the real data', () => {
       [sum(sKey, s.date.length, (i) => s.sales[i]), (i) => o.sales[i], MONEY],
       [sum(sKey, s.date.length, (i) => s.orders[i]), (i) => o.orders[i], 0],
       [sum(sKey, s.date.length, (i) => s.units[i]), (i) => o.units[i], 0],
+      [sum(sKey, s.date.length, (i) => s.sessions[i]), (i) => o.sessions[i], 0],
       [sum(cKey, c.date.length, (i) => c.cost[i]), (i) => o.ad_spend[i], MONEY],
       [sum(cKey, c.date.length, (i) => c.sales[i]), (i) => o.ad_sales[i], MONEY],
     ]

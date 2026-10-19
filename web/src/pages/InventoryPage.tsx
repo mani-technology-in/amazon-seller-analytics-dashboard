@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { useFilters } from '../app/filters'
-import { useDatasets } from '../app/useDatasets'
+import { useDatasets, useDatasetsAfter } from '../app/useDatasets'
 import { DataTable, type Column } from '../components/DataTable'
 import { FilterBar } from '../components/FilterBar'
 import { Flag } from '../components/Flag'
@@ -31,10 +31,34 @@ const control =
 export function InventoryPage() {
   const manifest = useOutletContext<Manifest>()
   const { filters, update } = useFilters(manifest.dataStart, manifest.dataEnd)
-  const data = useDatasets('inventoryDaily', 'stockSalesDaily', 'products', 'marketplaces')
+  const asOf = filters.range.end
+  // Stock totals come from one small file and show first; cover, flags, the chart and the
+  // table need every product's stock and sales and follow.
+  const fast = useDatasets('inventorySummaryDaily')
+  const data = useDatasetsAfter(
+    fast.status !== 'loading',
+    'inventoryDaily',
+    'stockSalesDaily',
+    'products',
+    'marketplaces',
+  )
+
+  const totals = useMemo(() => {
+    if (fast.status !== 'ready') return null
+    const t = fast.data.inventorySummaryDaily
+    let available = 0
+    let inbound = 0
+    const networks = new Set<string>()
+    for (let i = 0; i < t.date.length; i++) {
+      if (t.date[i] !== asOf) continue
+      available += t.available[i]
+      inbound += t.inbound[i]
+      networks.add(t.network[i])
+    }
+    return { available, inbound, networks: networks.size }
+  }, [fast, asOf])
   // the product and network the stock chart shows; until picked, the lowest cover
   const [picked, setPicked] = useState<{ asin: string; network: NetworkCode } | null>(null)
-  const asOf = filters.range.end
 
   const view = useMemo(() => {
     if (data.status !== 'ready') return null
@@ -99,6 +123,7 @@ export function InventoryPage() {
     }
   }, [view, data, picked, filters.range, filters.lowStockDays])
 
+  if (fast.status === 'error') return <ErrorBox error={fast.error} />
   if (data.status === 'error') return <ErrorBox error={data.error} />
 
   return (
@@ -115,7 +140,7 @@ export function InventoryPage() {
         showCompare={false}
         showLowStock
       />
-      {!view ? (
+      {!totals ? (
         <Loading />
       ) : (
         <>
@@ -125,20 +150,20 @@ export function InventoryPage() {
           >
             <KpiTile
               label="Available units"
-              value={count(view.available)}
-              current={view.available}
+              value={count(totals.available)}
+              current={totals.available}
               previous={undefined}
               better="neutral"
               aside={
                 <Note>
-                  In {view.networks} fulfilment network{view.networks === 1 ? '' : 's'}
+                  In {totals.networks} fulfilment network{totals.networks === 1 ? '' : 's'}
                 </Note>
               }
             />
             <KpiTile
               label="Inbound units"
-              value={count(view.inbound)}
-              current={view.inbound}
+              value={count(totals.inbound)}
+              current={totals.inbound}
               previous={undefined}
               better="neutral"
               aside={<Note>On the way to Amazon</Note>}
@@ -146,26 +171,34 @@ export function InventoryPage() {
             <KpiTile
               label="Days of cover"
               value={
-                view.cover.daysOfCover === null ? '–' : count(Math.round(view.cover.daysOfCover))
+                !view
+                  ? null
+                  : view.cover.daysOfCover === null
+                    ? '–'
+                    : count(Math.round(view.cover.daysOfCover))
               }
-              current={view.cover.daysOfCover}
+              current={view?.cover.daysOfCover ?? null}
               previous={undefined}
               better="neutral"
               hint="All stock ÷ average units sold per day over the last 30 days"
-              aside={<Note>At {count(Math.round(view.cover.avgDailyUnits))} units a day</Note>}
+              aside={
+                view ? (
+                  <Note>At {count(Math.round(view.cover.avgDailyUnits))} units a day</Note>
+                ) : undefined
+              }
             />
             <KpiTile
               label="Products low on stock"
-              value={count(view.low)}
-              current={view.low}
+              value={view ? count(view.low) : null}
+              current={view?.low ?? null}
               previous={undefined}
               better="neutral"
               aside={<Note>Under {filters.lowStockDays} days of cover</Note>}
             />
             <KpiTile
               label="Products out of stock"
-              value={count(view.out)}
-              current={view.out}
+              value={view ? count(view.out) : null}
+              current={view?.out ?? null}
               previous={undefined}
               better="neutral"
               aside={<Note>In at least one network</Note>}
@@ -224,84 +257,88 @@ export function InventoryPage() {
             </section>
           ) : null}
 
-          <DataTable<InventoryRow>
-            title="Stock by product and network"
-            rows={view.rows}
-            rowKey={(r) => `${r.network} ${r.asin}`}
-            csvName="inventory.csv"
-            initialSort={{ id: 'cover', desc: false }}
-            columns={
-              [
-                {
-                  id: 'title',
-                  header: 'Product',
-                  value: (r) => r.title,
-                  cell: (r) => (
-                    <Link
-                      className="text-accent-strong hover:underline"
-                      to={{ pathname: `/sales/${r.asin}`, search: location.search }}
-                    >
-                      {r.title.replace('Demo Brand ', '')}
-                    </Link>
-                  ),
-                },
-                {
-                  id: 'network',
-                  header: 'Network',
-                  value: (r) => r.network,
-                  hint: 'Fulfilment network: Germany and France share the EU stock',
-                },
-                {
-                  id: 'available',
-                  header: 'Available',
-                  value: (r) => r.available,
-                  cell: (r) => count(r.available),
-                  align: 'right',
-                },
-                {
-                  id: 'inbound',
-                  header: 'Inbound',
-                  value: (r) => r.inbound,
-                  cell: (r) => count(r.inbound),
-                  align: 'right',
-                  hint: 'Units in shipments to Amazon: working, shipped and receiving',
-                },
-                {
-                  id: 'avg',
-                  header: 'Avg daily units',
-                  value: (r) => r.avgDailyUnits,
-                  cell: (r) => decimal1(r.avgDailyUnits),
-                  align: 'right',
-                  hint: 'Units sold in the 30 days to the stock date ÷ 30, in the marketplaces this network serves',
-                },
-                {
-                  id: 'cover',
-                  header: 'Days of cover',
-                  value: (r) => (r.outOfStock ? 0 : r.daysOfCover),
-                  cell: (r) =>
-                    r.daysOfCover === null ? (
-                      <span className="text-ink-3">no recent sales</span>
-                    ) : (
-                      `${Math.round(r.daysOfCover)} days`
+          {!view ? (
+            <Loading what="stock by product" />
+          ) : (
+            <DataTable<InventoryRow>
+              title="Stock by product and network"
+              rows={view.rows}
+              rowKey={(r) => `${r.network} ${r.asin}`}
+              csvName="inventory.csv"
+              initialSort={{ id: 'cover', desc: false }}
+              columns={
+                [
+                  {
+                    id: 'title',
+                    header: 'Product',
+                    value: (r) => r.title,
+                    cell: (r) => (
+                      <Link
+                        className="text-accent-strong hover:underline"
+                        to={{ pathname: `/sales/${r.asin}`, search: location.search }}
+                      >
+                        {r.title.replace('Demo Brand ', '')}
+                      </Link>
                     ),
-                  align: 'right',
-                },
-                {
-                  id: 'status',
-                  header: 'Status',
-                  value: (r) => ['Out of stock', 'Low stock', 'In stock'][status(r)],
-                  cell: (r) =>
-                    r.outOfStock ? (
-                      <Flag kind="critical" label="Out of stock" />
-                    ) : r.lowStock ? (
-                      <Flag kind="warning" label="Low stock" />
-                    ) : (
-                      <Flag kind="good" label="In stock" />
-                    ),
-                },
-              ] satisfies Column<InventoryRow>[]
-            }
-          />
+                  },
+                  {
+                    id: 'network',
+                    header: 'Network',
+                    value: (r) => r.network,
+                    hint: 'Fulfilment network: Germany and France share the EU stock',
+                  },
+                  {
+                    id: 'available',
+                    header: 'Available',
+                    value: (r) => r.available,
+                    cell: (r) => count(r.available),
+                    align: 'right',
+                  },
+                  {
+                    id: 'inbound',
+                    header: 'Inbound',
+                    value: (r) => r.inbound,
+                    cell: (r) => count(r.inbound),
+                    align: 'right',
+                    hint: 'Units in shipments to Amazon: working, shipped and receiving',
+                  },
+                  {
+                    id: 'avg',
+                    header: 'Avg daily units',
+                    value: (r) => r.avgDailyUnits,
+                    cell: (r) => decimal1(r.avgDailyUnits),
+                    align: 'right',
+                    hint: 'Units sold in the 30 days to the stock date ÷ 30, in the marketplaces this network serves',
+                  },
+                  {
+                    id: 'cover',
+                    header: 'Days of cover',
+                    value: (r) => (r.outOfStock ? 0 : r.daysOfCover),
+                    cell: (r) =>
+                      r.daysOfCover === null ? (
+                        <span className="text-ink-3">no recent sales</span>
+                      ) : (
+                        `${Math.round(r.daysOfCover)} days`
+                      ),
+                    align: 'right',
+                  },
+                  {
+                    id: 'status',
+                    header: 'Status',
+                    value: (r) => ['Out of stock', 'Low stock', 'In stock'][status(r)],
+                    cell: (r) =>
+                      r.outOfStock ? (
+                        <Flag kind="critical" label="Out of stock" />
+                      ) : r.lowStock ? (
+                        <Flag kind="warning" label="Low stock" />
+                      ) : (
+                        <Flag kind="good" label="In stock" />
+                      ),
+                  },
+                ] satisfies Column<InventoryRow>[]
+              }
+            />
+          )}
         </>
       )}
     </>

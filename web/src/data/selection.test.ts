@@ -26,8 +26,19 @@ const files = {
     sales: [100, 40, 10],
     orders: [5, 2, 1],
     units: [6, 2, 1],
+    sessions: [50, 20, 9],
     ad_spend: [10, 8, 0],
     ad_sales: [30, 16, 0],
+  },
+  'profit_summary_daily.json': {
+    date: ['2026-01-01', '2026-01-01', '2026-01-01'],
+    marketplace: ['US', 'UK', 'DE'],
+    units_shipped: [6, 2, 1],
+    principal: [100, 40, 10],
+    refunds: [0, 4, 0],
+    referral_fees: [15, 6, 1.5],
+    fba_fees: [10, 4, 1],
+    product_cost: [30, 12, 3],
   },
   'mkt/US/sales_daily.json': {
     date: ['2026-01-01'],
@@ -46,6 +57,12 @@ const files = {
     orders: [1, 1],
     sales: [20, 20],
     sessions: [9, 9],
+  },
+  'inventory_summary_daily.json': {
+    date: ['d', 'd', 'd'],
+    network: ['US', 'UK', 'EU'],
+    available: [5, 7, 6],
+    inbound: [1, 1, 1],
   },
   'net/US/inventory_daily.json': { date: ['d'], network: ['US'], available: [5] },
   'net/EU/inventory_daily.json': { date: ['d'], network: ['EU'], available: [6] },
@@ -86,6 +103,10 @@ describe('choosing marketplaces and currency (FR-17, FR-18)', () => {
     expect(o.sales).toEqual([50, 11])
     expect(o.ad_spend).toEqual([10, 0])
     expect(o.orders).toEqual([2, 1])
+    const p = await data.profitSummaryDaily()
+    expect(p.marketplace).toEqual(['UK', 'DE'])
+    expect(p.refunds).toEqual([5, 0])
+    expect(p.units_shipped).toEqual([2, 1]) // counts are not money
   })
 
   it('stock sales cover every marketplace a chosen network serves (France shares EU stock)', async () => {
@@ -108,6 +129,7 @@ describe('choosing marketplaces and currency (FR-17, FR-18)', () => {
     const data = selectData(source().ds, { marketplaces: ['US', 'DE', 'FR'], currency: 'usd' })
     expect((await data.campaigns()).map((c) => c.campaign_id)).toEqual(['1', '2'])
     expect((await data.inventoryDaily()).available).toEqual([5, 6]) // DE and FR share the EU pool
+    expect((await data.inventorySummaryDaily()).network).toEqual(['US', 'EU'])
   })
 })
 

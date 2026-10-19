@@ -14,16 +14,13 @@ from models import build
 
 MARKETPLACES = ["CA", "DE", "FR", "MX", "UK", "US"]
 NETWORKS = ["CA", "EU", "MX", "UK", "US"]
-# What the Overview page downloads today (the US marketplace in USD).
+# What a first visit downloads before the Overview's tiles and charts show (all marketplaces,
+# in USD); the files its tables need follow.
 FIRST_LOAD = [
     "manifest.json",
-    "products.json",
-    "campaigns.json",
     "marketplaces.json",
     "fx_monthly.json",
-    "mkt/US/sales_daily.json",
-    "mkt/US/ads_campaign_daily.json",
-    "mkt/US/ads_product_daily.json",
+    "overview_daily.json",
 ]
 
 
@@ -105,6 +102,7 @@ def test_overview_matches_the_sales_and_ads_files(exported):
     for name, col, ocol in [
         ("sales_daily.json", "sales", "sales"),
         ("sales_daily.json", "units", "units"),
+        ("sales_daily.json", "sessions", "sessions"),
         ("ads_campaign_daily.json", "cost", "ad_spend"),
     ]:
         data = _read_all(out, name)
@@ -154,12 +152,14 @@ def test_fact_files_match_the_marts_for_every_marketplace(exported, name, mart, 
 
 
 def test_size_budget(exported):
-    """CR-1 design budget: the first load under about 300 KB of data compressed; the biggest
+    """CR-1 design budget: the first view's data well under 300 KB compressed; the biggest
     single file (one marketplace's keywords, loaded on the Advertising page) under about 1.5 MB;
     each data file for all six marketplaces at once (the heaviest choice) under 2 MB."""
     out, _ = exported
     first = sum(_gzip_kb(out / name) for name in FIRST_LOAD)
-    assert first < 300, f"first load {first:.0f} KB"
+    assert first < 100, f"first view {first:.0f} KB"
+    for name in ("profit_summary_daily.json", "inventory_summary_daily.json"):
+        assert _gzip_kb(out / name) < 100, name
     for path in _paths("ads_target_daily.json"):
         assert _gzip_kb(out / path) < 1536, path
     for name in SPLIT_FILES:
@@ -183,3 +183,47 @@ def test_marketplaces_and_exchange_rates(exported):
     assert len(fx["year_month"]) == 48
     mxn = [r for c, r in zip(fx["currency"], fx["usd_rate"], strict=True) if c == "MXN"]
     assert all(0.04 < r < 0.07 for r in mxn), "FX rates keep their 6 decimals"
+
+
+@pytest.mark.parametrize(
+    ("name", "key", "column", "mart", "mart_column"),
+    [
+        (
+            "inventory_summary_daily.json",
+            "network",
+            "available",
+            "fct_inventory_daily",
+            "available",
+        ),
+        ("inventory_summary_daily.json", "network", "inbound", "fct_inventory_daily", "inbound"),
+        ("profit_summary_daily.json", "marketplace", "principal", "fct_profit_daily", "principal"),
+        (
+            "profit_summary_daily.json",
+            "marketplace",
+            "product_cost",
+            "fct_profit_daily",
+            "product_cost",
+        ),
+        (
+            "profit_summary_daily.json",
+            "marketplace",
+            "units_shipped",
+            "fct_profit_daily",
+            "units_shipped",
+        ),
+    ],
+)
+def test_summary_files_match_the_marts(exported, name, key, column, mart, mart_column):
+    """The small pre-totalled files the pages show first add up to the same totals."""
+    out, _ = exported
+    data = _read(out, name)
+    totals: dict[str, float] = {}
+    for k, v in zip(data[key], data[column], strict=True):
+        totals[k] = totals.get(k, 0) + v
+    with connect() as conn, conn.cursor() as cur:
+        # identifiers come from the fixed list above, never from input
+        cur.execute(f"SELECT {key}, sum({mart_column}) FROM marts.{mart} GROUP BY 1")  # nosemgrep
+        expected = {k: float(v) for k, v in cur.fetchall()}
+    assert set(totals) == set(expected)
+    for k, v in expected.items():
+        assert totals[k] == pytest.approx(v, abs=0.01), (name, column, k)

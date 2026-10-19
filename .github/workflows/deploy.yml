@@ -37,7 +37,7 @@ jobs:
   deploy:
     name: Build, smoke test, deploy (${{ inputs.branch }})
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     concurrency:
       group: pages-${{ inputs.branch }}
       cancel-in-progress: ${{ inputs.branch != 'main' }}
@@ -58,6 +58,12 @@ jobs:
     env:
       DATABASE_URL: postgresql://asad:asad@localhost:5432/asad
       PAGES_BRANCH: ${{ inputs.branch }}
+      # PostHog project key (public by design; a repository variable, not in the code). Empty
+      # means analytics is off; the build does not fail.
+      VITE_POSTHOG_KEY: ${{ vars.POSTHOG_KEY }}
+      # Tools run with npx, pinned
+      LHCI: "@lhci/cli@0.15.1"
+      ZAP_IMAGE: ghcr.io/zaproxy/zaproxy:stable
     outputs:
       url: ${{ steps.deploy.outputs.url }}
     steps:
@@ -134,6 +140,60 @@ jobs:
             test "$code" = "200"
           done
           npm run smoke -- --output=test-results/preview
+
+      # Speed and accessibility of every page on the preview, as a phone on a slow 4G
+      # connection (Lighthouse's simulation), median of 3 runs. Budgets in web/lighthouserc.json.
+      - name: Lighthouse (previews only)
+        if: inputs.branch != 'main'
+        working-directory: web
+        env:
+          SITE: ${{ steps.deploy.outputs.url }}
+        run: |
+          set +e
+          npx --yes "$LHCI" autorun \
+            --collect.url="$SITE/" --collect.url="$SITE/sales" --collect.url="$SITE/inventory" \
+            --collect.url="$SITE/advertising" --collect.url="$SITE/profit" --collect.url="$SITE/reports"
+          status=$?
+          node e2e/lighthouse-summary.mjs
+          exit $status
+
+      # OWASP ZAP baseline: a passive scan of the preview (spider plus header and content
+      # checks, no attacks). Any alert of medium risk or higher fails the job.
+      - name: ZAP baseline scan (previews only)
+        # runs even when Lighthouse fails, so every preview gets its security scan
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' && inputs.branch != 'main' }}
+        env:
+          SITE: ${{ steps.deploy.outputs.url }}
+        run: |
+          mkdir -p zap && chmod 777 zap
+          docker pull -q "$ZAP_IMAGE"
+          echo "ZAP image: $(docker image inspect --format '{{index .RepoDigests 0}}' "$ZAP_IMAGE")"
+          # -I: warnings do not fail the scan itself; the risk check below decides
+          docker run --rm -v "$PWD/zap:/zap/wrk:rw" "$ZAP_IMAGE" \
+            zap-baseline.py -t "$SITE" -J zap.json -r zap.html -I || true
+          test -s zap/zap.json
+          jq -r '.site[].alerts[] | "\(.riskdesc)\t\(.alert)\t\(.count) instances"' zap/zap.json \
+            | sort | tee zap/alerts.txt
+          # each medium-or-higher alert, with its first URL and evidence, as an annotation
+          jq -r '.site[].alerts[] | select((.riskcode | tonumber) >= 2)
+            | "::warning title=ZAP \(.riskdesc)::\(.alert) (plugin \(.pluginid)): \(.instances[0].uri) \(.instances[0].evidence // "")"' \
+            zap/zap.json
+          {
+            echo "### ZAP baseline scan"
+            echo ""
+            if [ -s zap/alerts.txt ]; then
+              echo '| Risk | Alert | Count |'
+              echo '| --- | --- | --- |'
+              sed 's/\t/ | /g; s/^/| /; s/$/ |/' zap/alerts.txt
+            else
+              echo "No alerts."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          high=$(jq '[.site[].alerts[] | select((.riskcode | tonumber) >= 2)] | length' zap/zap.json)
+          if [ "$high" -gt 0 ]; then
+            echo "::error title=ZAP::$high alert(s) of medium risk or higher, see the job summary"
+            exit 1
+          fi
 
       - name: Smoke test the custom domain (production only)
         if: inputs.branch == 'main'
