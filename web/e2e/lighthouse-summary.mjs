@@ -39,7 +39,7 @@ const rows = [...byUrl].map(([url, runs]) => {
   }
 })
 const table = [
-  '### Lighthouse (phone, simulated slow 4G, median of 3 runs)',
+  `### Lighthouse (phone, simulated slow 4G, median of ${process.env.LH_RUNS ?? 3} runs)`,
   '',
   '| Page | Performance | Accessibility | LCP | CLS | TBT | LCP of each run (s) |',
   '| --- | --- | --- | --- | --- | --- | --- |',
@@ -48,11 +48,26 @@ const table = [
       `| ${r.page} | ${r.performance} | ${r.accessibility} | ${r.lcp} | ${r.cls} | ${r.tbt} | ${r.lcpRuns} |`,
   ),
   '',
-  'Budgets: LCP over 5 s, CLS over 0.1 or accessibility under 95 fail the check; TBT over 600 ms is a warning. Target LCP: 2.5 s.',
+  'Fail the check: CLS over 0.1, accessibility under 95, best practices under 90 (stable from run to run). Warnings only: LCP over the 2.5 s target and TBT over 600 ms, because simulated LCP varies too much on CI (2.5 s to 5.1 s for the same page); the weekly Lighthouse run tracks it on the live site.',
 ].join('\n')
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, table + '\n')
 for (const r of rows) {
   console.log(
     `::notice title=Lighthouse ${r.page}::median performance ${r.performance}, accessibility ${r.accessibility}, LCP ${r.lcp} (runs ${r.lcpRuns}; element ${r.lcpElements}), CLS ${r.cls}, TBT ${r.tbt}`,
   )
+}
+
+// Each budget Lighthouse CI checked and missed, as an annotation (errors fail the job; warnings
+// are reported only), so a failure can be read without the log.
+try {
+  const results = JSON.parse(readFileSync('.lighthouseci/assertion-results.json', 'utf-8'))
+  for (const a of results.filter((r) => !r.passed)) {
+    const level = a.level === 'error' ? 'error' : 'warning'
+    const page = new URL(a.url).pathname
+    console.log(
+      `::${level} title=Lighthouse ${page}::${a.auditProperty ?? a.auditId}: ${a.actual} (budget ${a.operator} ${a.expected})`,
+    )
+  }
+} catch {
+  // no assertions were run (lhci collect only, as in the weekly run)
 }

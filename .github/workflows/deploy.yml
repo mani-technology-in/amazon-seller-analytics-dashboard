@@ -1,6 +1,20 @@
 name: Deploy
 
 # Called by CI after the pipeline, web, parity and security jobs pass.
+#
+# The checks run as separate jobs, side by side, and each one runs to the end even when another
+# fails, so one run shows every problem at once (lesson from PR #35, which needed 7 runs because
+# each failing step hid the next):
+#
+#   build ─┬─ smoke (chromium | firefox | webkit) ─┐
+#          └──────────────────────────────────────── deploy ─┬─ live smoke (3 browsers)
+#                                                            ├─ lighthouse  (previews)
+#                                                            ├─ zap         (previews)
+#                                                            └─ production  (main)
+#   report: one table of every job's result; fails if any job failed.
+#
+# Production is only deployed when the smoke tests pass; a preview is deployed anyway, so the
+# checks after it still run and report.
 #   pull request -> a preview at https://pr-<number>.<project>.pages.dev
 #   main         -> production (the live demo)
 # Needs the repository secrets CLOUDFLARE_API_TOKEN (Account > Cloudflare Pages > Edit) and
@@ -32,15 +46,15 @@ env:
   PRODUCTION_URL: https://demo.manitechnology.com
   # The Wrangler command line, pinned (replaces cloudflare/wrangler-action, which runs on Node 20).
   WRANGLER: wrangler@4.141.0
+  # Tools run with npx or Docker, pinned
+  LHCI: "@lhci/cli@0.15.1"
+  ZAP_IMAGE: ghcr.io/zaproxy/zaproxy:stable
 
 jobs:
-  deploy:
-    name: Build, smoke test, deploy (${{ inputs.branch }})
+  build:
+    name: Build data and site
     runs-on: ubuntu-latest
-    timeout-minutes: 35
-    concurrency:
-      group: pages-${{ inputs.branch }}
-      cancel-in-progress: ${{ inputs.branch != 'main' }}
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16
@@ -57,15 +71,9 @@ jobs:
           --health-retries 30
     env:
       DATABASE_URL: postgresql://asad:asad@localhost:5432/asad
-      PAGES_BRANCH: ${{ inputs.branch }}
       # PostHog project key (public by design; a repository variable, not in the code). Empty
       # means analytics is off; the build does not fail.
       VITE_POSTHOG_KEY: ${{ vars.POSTHOG_KEY }}
-      # Tools run with npx, pinned
-      LHCI: "@lhci/cli@0.15.1"
-      ZAP_IMAGE: ghcr.io/zaproxy/zaproxy:stable
-    outputs:
-      url: ${{ steps.deploy.outputs.url }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -73,12 +81,11 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           python-version: "3.12"
-          enable-cache: false # this job publishes the site, so it never restores a cache
+          enable-cache: false # this workflow publishes the site, so it never restores a cache
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           package-manager-cache: false
-
       - name: Install
         run: make install
       - name: Build data (generate, load, models, export)
@@ -86,16 +93,75 @@ jobs:
       - name: Build the site
         working-directory: web
         run: npm run build
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: site-${{ inputs.branch }}-${{ github.run_attempt }}
+          path: web/dist/
+          retention-days: 3
+          if-no-files-found: error
 
-      - name: Install Chromium, Firefox and WebKit for the smoke test
+  smoke:
+    name: Smoke test the build (${{ matrix.browser }})
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false # every browser reports, even when another fails
+      matrix:
+        include:
+          - browser: chromium
+            projects: --project=chromium --project=android
+          - browser: firefox
+            projects: --project=firefox
+          - browser: webkit
+            projects: --project=webkit --project=iphone
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/web-setup
+        with:
+          site: site-${{ inputs.branch }}-${{ github.run_attempt }}
+          browser: ${{ matrix.browser }}
+      - name: Smoke test
         working-directory: web
-        run: npx playwright install --with-deps chromium firefox webkit
-      - name: Smoke test the build
-        working-directory: web
-        run: npm run smoke -- --output=test-results/build
+        env:
+          PROJECTS: ${{ matrix.projects }}
+        # PROJECTS is a fixed list from the matrix above, split into arguments on purpose
+        run: npm run smoke -- $PROJECTS --output=test-results/build
+      - uses: ./.github/actions/smoke-traces
+        if: always()
+        with:
+          name: traces-build-${{ matrix.browser }}-${{ inputs.branch }}-${{ github.run_attempt }}
 
+  deploy:
+    name: Deploy (${{ inputs.branch }})
+    needs: [build, smoke]
+    # Production only after every smoke test passed; previews deploy anyway so the checks
+    # after this still run.
+    if: >-
+      !cancelled() && needs.build.result == 'success' &&
+      (inputs.branch != 'main' || needs.smoke.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: pages-${{ inputs.branch }}
+      cancel-in-progress: ${{ inputs.branch != 'main' }}
+    env:
+      PAGES_BRANCH: ${{ inputs.branch }}
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+      alias: ${{ steps.deploy.outputs.alias }}
+    steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site-${{ inputs.branch }}-${{ github.run_attempt }}
+          path: dist
       - name: Create the Pages project if it does not exist
-        working-directory: web
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -105,10 +171,8 @@ jobs:
           else
             npx --yes "$WRANGLER" pages project create "$PAGES_PROJECT" --production-branch=main
           fi
-
       - name: Deploy to Cloudflare Pages
         id: deploy
-        working-directory: web
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -123,31 +187,76 @@ jobs:
           if [ -z "$url" ]; then echo "::error::No deployment URL in Wrangler's output file"; exit 1; fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "alias=$(echo "$record" | jq -r '.alias // empty')" >> "$GITHUB_OUTPUT"
-
-      - name: Smoke test the deployed site
-        working-directory: web
+      - name: Wait until the deployment answers
         env:
-          SMOKE_BASE_URL: ${{ steps.deploy.outputs.url }}
+          SITE: ${{ steps.deploy.outputs.url }}
         run: |
-          echo "Checking $SMOKE_BASE_URL"
           # A new deployment (and, the first time, a new pages.dev address and its certificate)
-          # can take a few minutes to answer, so wait for it before checking.
+          # can take a few minutes to answer.
           curl -sS -o /dev/null --retry 30 --retry-delay 10 --retry-all-errors --max-time 15 \
-            --fail "$SMOKE_BASE_URL/"
+            --fail "$SITE/"
           for path in / /data/manifest.json /inventory /products/does-not-exist; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" --retry 5 --retry-delay 5 "$SMOKE_BASE_URL$path")
+            code=$(curl -s -o /dev/null -w "%{http_code}" --retry 5 --retry-delay 5 "$SITE$path")
             echo "$path -> $code"
             test "$code" = "200"
           done
-          npm run smoke -- --output=test-results/preview
 
-      # Speed and accessibility of every page on the preview, as a phone on a slow 4G
-      # connection (Lighthouse's simulation), median of 3 runs. Budgets in web/lighthouserc.json.
-      - name: Lighthouse (previews only)
-        if: inputs.branch != 'main'
+  live-smoke:
+    name: Smoke test the deployed site (${{ matrix.browser }})
+    needs: deploy
+    if: ${{ !cancelled() && needs.deploy.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - browser: chromium
+            projects: --project=chromium --project=android
+          - browser: firefox
+            projects: --project=firefox
+          - browser: webkit
+            projects: --project=webkit --project=iphone
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/web-setup
+        with:
+          browser: ${{ matrix.browser }}
+      - name: Smoke test
         working-directory: web
         env:
-          SITE: ${{ steps.deploy.outputs.url }}
+          SMOKE_BASE_URL: ${{ needs.deploy.outputs.url }}
+          PROJECTS: ${{ matrix.projects }}
+        run: npm run smoke -- $PROJECTS --output=test-results/preview
+      - uses: ./.github/actions/smoke-traces
+        if: always()
+        with:
+          name: traces-live-${{ matrix.browser }}-${{ inputs.branch }}-${{ github.run_attempt }}
+
+  # Speed and accessibility of every page on the preview, as a phone on a slow 4G connection
+  # (Lighthouse's simulation), median of 3 runs. Budgets in web/lighthouserc.json: only the
+  # figures that are stable from run to run fail the check; LCP is reported (it varied from
+  # 2.5 s to 5.1 s for the same page on CI) and tracked weekly in lighthouse-weekly.yml.
+  lighthouse:
+    name: Lighthouse
+    needs: deploy
+    if: ${{ !cancelled() && needs.deploy.result == 'success' && inputs.branch != 'main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Lighthouse
+        working-directory: web
+        env:
+          SITE: ${{ needs.deploy.outputs.url }}
         run: |
           set +e
           npx --yes "$LHCI" autorun \
@@ -157,13 +266,18 @@ jobs:
           node e2e/lighthouse-summary.mjs
           exit $status
 
-      # OWASP ZAP baseline: a passive scan of the preview (spider plus header and content
-      # checks, no attacks). Any alert of medium risk or higher fails the job.
-      - name: ZAP baseline scan (previews only)
-        # runs even when Lighthouse fails, so every preview gets its security scan
-        if: ${{ !cancelled() && steps.deploy.outcome == 'success' && inputs.branch != 'main' }}
+  # OWASP ZAP baseline: a passive scan of the preview (spider plus header and content checks,
+  # no attacks). Any alert of medium risk or higher fails the job.
+  zap:
+    name: ZAP baseline scan
+    needs: deploy
+    if: ${{ !cancelled() && needs.deploy.result == 'success' && inputs.branch != 'main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Scan
         env:
-          SITE: ${{ steps.deploy.outputs.url }}
+          SITE: ${{ needs.deploy.outputs.url }}
         run: |
           mkdir -p zap && chmod 777 zap
           docker pull -q "$ZAP_IMAGE"
@@ -194,9 +308,29 @@ jobs:
             echo "::error title=ZAP::$high alert(s) of medium risk or higher, see the job summary"
             exit 1
           fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: zap-${{ inputs.branch }}-${{ github.run_attempt }}
+          path: zap/
+          retention-days: 14
+          if-no-files-found: ignore
 
-      - name: Smoke test the custom domain (production only)
-        if: inputs.branch == 'main'
+  production:
+    name: Check the custom domain (production)
+    needs: [build, deploy]
+    if: ${{ !cancelled() && needs.deploy.result == 'success' && inputs.branch == 'main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/web-setup
+        with:
+          site: site-${{ inputs.branch }}-${{ github.run_attempt }}
+          browser: all
+      - name: Smoke test the custom domain
         working-directory: web
         env:
           SMOKE_BASE_URL: ${{ env.PRODUCTION_URL }}
@@ -219,32 +353,38 @@ jobs:
           done
           # The smoke test also checks the security headers on this domain (NFR-SEC-1).
           npm run smoke -- --output=test-results/production
-
-      # Keep the Playwright trace (requests, timings, screenshots, console) of any smoke test
-      # attempt that failed, including ones that passed on retry, so the failure can be read
-      # without re-running it (issue #26). Each smoke run writes to its own folder.
-      - name: Keep the traces of failed smoke test attempts
+      - uses: ./.github/actions/smoke-traces
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: smoke-traces-${{ inputs.branch }}-${{ github.run_attempt }}
-          path: web/test-results/
-          retention-days: 14
-          if-no-files-found: ignore
-      - name: Summarise the traces of failed smoke test attempts
-        if: always()
-        working-directory: web
-        run: node e2e/trace-summary.mjs test-results
+          name: traces-production-${{ github.run_attempt }}
 
-      - name: Summary
+  report:
+    name: Deploy checks
+    needs: [build, smoke, deploy, live-smoke, lighthouse, zap, production]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Results of every check
         env:
-          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
-          ALIAS_URL: ${{ steps.deploy.outputs.alias }}
+          RESULTS: ${{ toJSON(needs) }}
+          BRANCH: ${{ inputs.branch }}
+          DEPLOY_URL: ${{ needs.deploy.outputs.url }}
+          ALIAS_URL: ${{ needs.deploy.outputs.alias }}
         run: |
           {
-            echo "### Deployed ($PAGES_BRANCH)"
+            echo "### Deploy checks ($BRANCH)"
             echo ""
-            echo "- This deployment: $DEPLOY_URL"
+            echo "| Check | Result |"
+            echo "| --- | --- |"
+            echo "$RESULTS" | jq -r 'to_entries[] | "| \(.key) | \(.value.result) |"'
+            echo ""
+            if [ -n "$DEPLOY_URL" ]; then echo "- This deployment: $DEPLOY_URL"; fi
             if [ -n "$ALIAS_URL" ]; then echo "- Branch alias: $ALIAS_URL"; fi
-            if [ "$PAGES_BRANCH" = "main" ]; then echo "- Live demo: $PRODUCTION_URL"; fi
+            if [ "$BRANCH" = "main" ]; then echo "- Live demo: $PRODUCTION_URL"; fi
           } >> "$GITHUB_STEP_SUMMARY"
+          failed=$(echo "$RESULTS" | jq -r '[to_entries[] | select(.value.result == "failure") | .key] | join(", ")')
+          if [ -n "$failed" ]; then
+            echo "::error title=Deploy checks::failed: $failed"
+            exit 1
+          fi

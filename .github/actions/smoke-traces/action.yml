@@ -1,0 +1,23 @@
+name: Smoke traces
+description: Keep the Playwright traces of failed smoke test attempts and summarise them.
+
+inputs:
+  name:
+    description: Artifact name (unique within the run)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # The trace (requests, timings, screenshots, console) of any attempt that failed, including
+    # ones that passed on retry, so a failure can be read without re-running it (issue #26).
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: ${{ inputs.name }}
+        path: web/test-results/
+        retention-days: 14
+        if-no-files-found: ignore
+    # The same, as annotations that can be read through the GitHub API
+    - shell: bash
+      working-directory: web
+      run: node e2e/trace-summary.mjs test-results
