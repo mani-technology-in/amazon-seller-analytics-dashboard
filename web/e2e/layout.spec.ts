@@ -7,6 +7,8 @@ const PAGES = [
   { path: '/sales', name: 'Sales' },
   { path: '/inventory', name: 'Inventory' },
   { path: '/advertising', name: 'Advertising' },
+  { path: '/profit', name: 'Profit' },
+  { path: '/reports', name: 'Reports' },
 ]
 
 test('every page has the side navigation in the website order, with the current page marked (FR-16)', async ({

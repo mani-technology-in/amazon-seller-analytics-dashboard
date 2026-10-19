@@ -30,6 +30,10 @@ interface DataTableProps<T> {
   rowKey: (row: T) => string
   emptyText?: string
   toolbar?: ReactNode
+  /** a totals row under the table: not sorted, not in the CSV; its first cell says "Total" */
+  footer?: T
+  /** a line under the title */
+  description?: ReactNode
 }
 
 /**
@@ -45,6 +49,8 @@ export function DataTable<T>({
   rowKey,
   emptyText = 'Nothing to show for these filters.',
   toolbar,
+  footer,
+  description,
 }: DataTableProps<T>) {
   const [sorting, setSorting] = useState<SortingState>(initialSort ? [initialSort] : [])
 
@@ -106,9 +112,12 @@ export function DataTable<T>({
   return (
     <section className="min-w-0 rounded-lg border border-surface-sunken bg-surface-page">
       <header className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-        <h2 className="text-section-title text-ink">
-          {title} <span className="font-normal text-ink-3">({rows.length})</span>
-        </h2>
+        <div>
+          <h2 className="text-section-title text-ink">
+            {title} <span className="font-normal text-ink-3">({rows.length})</span>
+          </h2>
+          {description ? <p className="mt-0.5 text-small text-ink-3">{description}</p> : null}
+        </div>
         <div className="flex flex-wrap items-center gap-3">
           {toolbar}
           <button
@@ -180,6 +189,20 @@ export function DataTable<T>({
               ))
             )}
           </tbody>
+          {footer && ordered.length ? (
+            <tfoot className="sticky bottom-0 bg-surface-side font-semibold">
+              <tr className="border-t border-line">
+                {columns.map((c, i) => (
+                  <td
+                    key={c.id}
+                    className={`whitespace-nowrap px-3 py-2.5 ${c.align === 'right' ? 'text-right font-mono text-table-number text-ink tabular-nums' : 'text-ink'}`}
+                  >
+                    {i === 0 ? 'Total' : c.cell ? c.cell(footer) : String(c.value(footer) ?? '')}
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
+          ) : null}
         </table>
       </div>
     </section>

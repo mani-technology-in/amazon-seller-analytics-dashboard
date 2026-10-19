@@ -5,12 +5,14 @@ import { useReduceMotion } from '../app/motion'
 import { dateLong } from '../lib/format'
 import { ReduceMotionSwitch } from './ReduceMotionSwitch'
 
-// The website's page order; Profit and Reports join this list with their pages (CR-1 PR 8).
+// The website's page order (FR-16).
 const NAV = [
   { to: '/', label: 'Overview', end: true },
   { to: '/sales', label: 'Sales' },
   { to: '/inventory', label: 'Inventory' },
   { to: '/advertising', label: 'Advertising' },
+  { to: '/profit', label: 'Profit' },
+  { to: '/reports', label: 'Reports' },
 ]
 
 const BUILT_BY = (
