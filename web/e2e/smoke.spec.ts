@@ -10,6 +10,16 @@ import { expect, isAbortedFontLoad, test } from './fixtures.ts'
 
 function watchErrors(page: Page): string[] {
   const errors: string[] = []
+  // A Content-Security-Policy refusal as one console error with the details the browser's own
+  // message leaves out: which rule, what was blocked, from where, and its first characters.
+  void page.addInitScript(() => {
+    document.addEventListener('securitypolicyviolation', (e) =>
+      console.error(
+        `CSP violation: ${e.violatedDirective}; blocked ${e.blockedURI || '(inline)'}; ` +
+          `source ${e.sourceFile || '?'}:${e.lineNumber}; sample "${e.sample}"`,
+      ),
+    )
+  })
   page.on('pageerror', (e) => errors.push(e.message))
   page.on('console', (m) => {
     if (m.type() !== 'error' || isAbortedFontLoad(m.text())) return
