@@ -8,11 +8,31 @@ import { expect, isAbortedFontLoad, test } from './fixtures.ts'
  * when SMOKE_BASE_URL is set).
  */
 
-function watchErrors(page: Page): string[] {
+async function watchErrors(page: Page): Promise<string[]> {
   const errors: string[] = []
+  // A Content-Security-Policy refusal as one console error with the details the browser's own
+  // message leaves out: which rule, what was blocked, from where, and its first characters.
+  // awaited, so it is in place before the test's first page load
+  await page.addInitScript(() => {
+    document.addEventListener('securitypolicyviolation', (e) =>
+      console.error(
+        `CSP violation: ${e.violatedDirective}; blocked ${e.blockedURI || '(inline)'}; ` +
+          `source ${e.sourceFile || '?'}:${e.lineNumber}; sample "${e.sample}"`,
+      ),
+    )
+  })
   page.on('pageerror', (e) => errors.push(e.message))
   page.on('console', (m) => {
-    if (m.type() === 'error' && !isAbortedFontLoad(m.text())) errors.push(m.text())
+    if (m.type() !== 'error' || isAbortedFontLoad(m.text())) return
+    // where it came from, so a CI failure names the file and line
+    const { url, lineNumber } = m.location()
+    let where = ''
+    try {
+      if (url) where = ` (${new URL(url).pathname}:${lineNumber})`
+    } catch {
+      where = ` (${url}:${lineNumber})` // not an absolute URL, e.g. an injected script
+    }
+    errors.push(m.text() + where)
   })
   return errors
 }
@@ -42,7 +62,7 @@ const PAGES = [
 
 for (const p of PAGES) {
   test(`${p.heading} page loads with data and no errors`, async ({ page }) => {
-    const errors = watchErrors(page)
+    const errors = await watchErrors(page)
     await page.goto(p.path)
     await expect(page.getByRole('heading', { level: 1, name: p.heading })).toBeVisible()
     await expect(page.getByText('Synthetic demo data')).toBeVisible()
@@ -304,14 +324,17 @@ test('the security headers are sent and chart tooltips break no CSP rule', async
       ),
     )
   })
-  const errors = watchErrors(page)
+  const errors = await watchErrors(page)
   const response = await page.goto('/')
   const headers = response!.headers()
   // only our own scripts, plus Cloudflare's analytics beacon that the live domain adds
   expect(headers['content-security-policy']).toContain(
     "script-src 'self' https://static.cloudflareinsights.com;",
   )
-  expect(headers['content-security-policy']).toContain("style-src 'self'")
+  // stylesheets only from our own files; style attributes allowed (charts size their elements)
+  expect(headers['content-security-policy']).toContain(
+    "style-src 'self'; style-src-attr 'unsafe-inline';",
+  )
   expect(headers['content-security-policy']).toContain("frame-ancestors 'none'")
   expect(headers['x-content-type-options']).toBe('nosniff')
   expect(headers['referrer-policy']).toBe('strict-origin-when-cross-origin')

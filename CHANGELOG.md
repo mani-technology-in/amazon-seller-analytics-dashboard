@@ -31,9 +31,12 @@ Version 1.1 (change request CR-1): a redesign to match the Amazon section of man
 
 ### Changed
 
+- Every pull request, including Dependabot's and forks', now builds the site and runs the browser smoke tests in Chromium, Firefox and WebKit; only deploying needs the Cloudflare secrets (#41: a Dependabot update merged without a browser test). Smoke-test console errors name their source file and line, and Content-Security-Policy violations their rule, source and first characters.
 - CI's deploy checks run as separate jobs side by side (smoke tests per browser, deployment, smoke test of the deployed site, Lighthouse, ZAP) and each runs to the end, with one **Deploy checks** job listing every result: one run now shows every problem, instead of one per run. Lighthouse fails only on figures that are stable between runs (CLS, accessibility, best practices); LCP is a warning, tracked weekly on the live demo. New `make preflight` (every local check, one line each) and `make ci PR=<number>` (a short digest of a CI run).
 
 ### Security
+
+- The Content-Security-Policy allows style attributes (`style-src-attr 'unsafe-inline'`), which the charts use to size and place their elements; `<style>` blocks and outside stylesheets stay blocked. WebKit in Playwright 1.64 started refusing those writes on four pages, where Chromium and Firefox never did (#41, approved by SAM).
 
 - A **Security** check runs on every pull request: gitleaks (secrets), osv-scanner (dependencies), zizmor (workflows) and Semgrep (code).
 - Security headers on every page: Content-Security-Policy (no inline scripts or styles, no framing), HSTS, X-Content-Type-Options, Referrer-Policy, Permissions-Policy. The browser smoke test runs under the same policy and fails on any violation.
