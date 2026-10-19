@@ -28,8 +28,16 @@ const PAGES = [
     heading: 'Sales',
     expects: ['Unit session percentage', 'Revenue by marketplace', 'Share of revenue'],
   },
-  { path: '/advertising', heading: 'Advertising', expects: ['Campaigns', 'Keywords and targets'] },
-  { path: '/inventory', heading: 'Inventory', expects: ['FBA inventory', 'Days of cover'] },
+  {
+    path: '/advertising',
+    heading: 'Advertising',
+    expects: ['Top 5 campaigns by spend', 'Keywords and targets', 'TACoS'],
+  },
+  {
+    path: '/inventory',
+    heading: 'Inventory',
+    expects: ['Stock by product and network', 'Products low on stock', 'Stock over time'],
+  },
 ]
 
 for (const p of PAGES) {
@@ -97,6 +105,48 @@ test('a product opens its revenue by marketplace in the Sales table (FR-11)', as
   await expect(
     page.getByRole('list', { name: 'Revenue by marketplace' }).getByRole('listitem'),
   ).toHaveCount(6)
+})
+
+test('Advertising: KPIs, the ACoS trend with the target, and no ads where none ran (FR-25, FR-26)', async ({
+  page,
+}) => {
+  await page.goto('/advertising?acos=25')
+  const kpis = page.getByRole('region', { name: 'Key figures' })
+  for (const label of ['Ad spend', 'Ad sales', 'ACoS', 'TACoS', 'ROAS']) {
+    await expect(kpis.getByText(label, { exact: true })).toBeVisible()
+  }
+  await expect(page.getByText('Target ACoS 25%')).toBeVisible()
+  await expect(page.locator('figure svg path[stroke-dasharray]').first()).toBeAttached()
+  await expect(page.getByRole('columnheader', { name: /Marketplace/ }).first()).toBeVisible()
+  await page.goto('/advertising?mkt=MX')
+  await expect(page.getByText(/No ads ran in Mexico/).first()).toBeVisible()
+})
+
+test('Inventory: stock over time for the lowest-cover product, with a picker (FR-23, FR-24)', async ({
+  page,
+}) => {
+  await page.goto('/inventory')
+  const kpis = page.getByRole('region', { name: 'Key figures' })
+  await expect(kpis.getByText('Products out of stock')).toBeVisible()
+  const chart = page.locator('figure')
+  await expect(chart).toHaveCount(1)
+  await expect(chart.locator('figcaption')).toContainText('Stock over time')
+  const network = page.getByRole('combobox', { name: 'Network' })
+  await network.selectOption({ index: 0 })
+  await page.getByRole('combobox', { name: 'Product' }).selectOption({ index: 1 })
+  await expect(chart.locator('figcaption')).toContainText('Stock over time')
+})
+
+test('a one-day stock-out is shaded on the stock chart', async ({ page }) => {
+  await page.goto('/inventory?mkt=DE&preset=custom&from=2025-12-01&to=2025-12-14')
+  await page.getByRole('combobox', { name: 'Product' }).selectOption('B01Z54AXCX')
+  await page.getByRole('combobox', { name: 'Network' }).selectOption('EU')
+  const chart = page.locator('figure')
+  await expect(chart.locator('figcaption')).toContainText('Out of stock on 1 day in this range')
+  // the band has a width: half a day either side of the stock-out day
+  const band = chart.locator('svg path[fill="#fdecee"]')
+  await expect(band).toHaveCount(1)
+  expect((await band.boundingBox())!.width).toBeGreaterThan(10)
 })
 
 test('old Products links open the Sales page, filters kept (FR-16)', async ({ page }) => {
@@ -209,9 +259,7 @@ test('a table exports CSV', async ({ page }) => {
   const chunks: Buffer[] = []
   for await (const c of stream) chunks.push(c as Buffer)
   const lines = Buffer.concat(chunks).toString('utf-8').trim().split(/\r?\n/)
-  expect(lines[0]).toBe(
-    'Product,Network,Category,Available,Inbound,Avg daily units,Days of cover,Status',
-  )
+  expect(lines[0]).toBe('Product,Network,Available,Inbound,Avg daily units,Days of cover,Status')
   expect(lines.length).toBe(41) // header + 40 products in the US network
 })
 

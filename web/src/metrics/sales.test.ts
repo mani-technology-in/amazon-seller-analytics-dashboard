@@ -8,6 +8,7 @@ import {
   revenueByMarketplace,
   salesKpis,
   stockCover,
+  stockSeries,
   unitsByMarketplace,
   weeks,
 } from './sales'
@@ -136,5 +137,21 @@ describe('days of cover (FR-5)', () => {
     expect(c.byAsin.get('A1')).toEqual({ available: 90, avgDailyUnits: 1, daysOfCover: 90 })
     expect(c.byAsin.get('A2')).toEqual({ available: 0, avgDailyUnits: 0, daysOfCover: null })
     expect(c.total.daysOfCover).toBe(90)
+  })
+})
+
+describe('stock over time (FR-24)', () => {
+  it('one product in one network, with the stock-out runs', () => {
+    const inv: InventoryDaily = {
+      date: ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04', '2026-09-02'],
+      network: ['EU', 'EU', 'EU', 'EU', 'US'],
+      asin: ['A1', 'A1', 'A1', 'A1', 'A1'],
+      available: [5, 0, 0, 40, 99],
+      reserved: [0, 0, 0, 0, 0],
+      inbound: [0, 0, 0, 0, 0],
+    }
+    const s = stockSeries(inv, 'A1', 'EU', { start: '2026-09-01', end: '2026-09-05' })
+    expect(s.available).toEqual([5, 0, 0, 40, null])
+    expect(s.outOfStock).toEqual([{ start: '2026-09-02', end: '2026-09-03' }])
   })
 })

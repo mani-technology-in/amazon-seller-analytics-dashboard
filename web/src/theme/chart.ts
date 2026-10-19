@@ -14,6 +14,10 @@ export const CHART = {
   grid: token('color.surface.sunken'),
   baseline: token('color.line.default'),
   pointer: token('color.ink.3'),
+  /** a band behind days that need attention, e.g. out of stock */
+  band: token('color.critical.soft'),
+  /** a dashed threshold line, e.g. target ACoS or the low-stock line */
+  reference: token('color.warning.default'),
   label: {
     color: token('color.ink.3'),
     fontFamily: token('font.family.mono'),

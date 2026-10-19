@@ -58,9 +58,7 @@ export function KpiTile({
       </div>
       {change === undefined && !aside ? null : (
         <div className="mt-2 flex min-h-6 items-center justify-between gap-2">
-          {change === undefined ? (
-            <span />
-          ) : (
+          {change === undefined ? null : (
             <div className={`text-caption tabular-nums ${tone}`}>
               {change === null ? (
                 <span className="text-ink-3">No comparison</span>
