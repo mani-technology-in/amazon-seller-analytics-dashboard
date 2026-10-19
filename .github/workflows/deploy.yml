@@ -27,11 +27,16 @@ on:
         description: Cloudflare Pages branch ("main" is production; anything else is a preview)
         required: true
         type: string
+      deploy:
+        description: Deploy and check the deployment (false for Dependabot and forks, which get no secrets)
+        required: false
+        type: boolean
+        default: true
     secrets:
       CLOUDFLARE_API_TOKEN:
-        required: true
+        required: false
       CLOUDFLARE_ACCOUNT_ID:
-        required: true
+        required: false
     outputs:
       url:
         description: URL of this deployment
@@ -140,7 +145,7 @@ jobs:
     # Production only after every smoke test passed; previews deploy anyway so the checks
     # after this still run.
     if: >-
-      !cancelled() && needs.build.result == 'success' &&
+      !cancelled() && inputs.deploy && needs.build.result == 'success' &&
       (inputs.branch != 'main' || needs.smoke.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 10

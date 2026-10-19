@@ -171,15 +171,17 @@ jobs:
   deploy:
     name: Deploy
     needs: [pipeline, web, parity, security]
-    # Same-repository pull requests get a preview; pushes to main go to production.
-    # Pull requests from forks, and Dependabot's, get no Cloudflare secrets, so they are not deployed.
-    if: >-
-      github.event_name == 'push' ||
-      (github.event.pull_request.head.repo.full_name == github.repository &&
-       github.event.pull_request.user.login != 'dependabot[bot]')
+    # Every pull request builds the site and runs the browser smoke tests. Same-repository pull
+    # requests also get a preview; pushes to main go to production. Pull requests from forks, and
+    # Dependabot's, get no Cloudflare secrets, so they are tested but not deployed (#40 merged a
+    # WebKit failure because Dependabot's pull requests skipped the browser tests).
     uses: ./.github/workflows/deploy.yml
     with:
       branch: ${{ github.event_name == 'push' && 'main' || format('pr-{0}', github.event.pull_request.number) }}
+      deploy: >-
+        ${{ github.event_name == 'push' ||
+        (github.event.pull_request.head.repo.full_name == github.repository &&
+         github.event.pull_request.user.login != 'dependabot[bot]') }}
     secrets:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

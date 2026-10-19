@@ -12,7 +12,10 @@ function watchErrors(page: Page): string[] {
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
   page.on('console', (m) => {
-    if (m.type() === 'error' && !isAbortedFontLoad(m.text())) errors.push(m.text())
+    if (m.type() !== 'error' || isAbortedFontLoad(m.text())) return
+    // where it came from, so a CI failure names the file and line
+    const { url, lineNumber } = m.location()
+    errors.push(url ? `${m.text()} (${new URL(url).pathname}:${lineNumber})` : m.text())
   })
   return errors
 }
