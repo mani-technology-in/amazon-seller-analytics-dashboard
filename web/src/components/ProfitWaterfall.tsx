@@ -1,5 +1,15 @@
 import type { WaterfallStep } from '../metrics/profit'
 
+const SHORT: Record<string, string> = {
+  Revenue: 'Rev.',
+  Refunds: 'Refund',
+  'Referral fees': 'Referral',
+  'FBA fees': 'FBA',
+  'Ad spend': 'Ads',
+  'Product cost': 'Cost',
+  'Net profit': 'Profit',
+}
+
 interface ProfitWaterfallProps {
   steps: WaterfallStep[]
   /** compact money, e.g. $12.3K */
@@ -66,7 +76,7 @@ export function ProfitWaterfall({ steps, format, formatFull, runKey }: ProfitWat
                 }}
               />
               <div
-                className={`wf-fade absolute -translate-x-1/2 -translate-y-full pb-1.5 font-mono text-caption whitespace-nowrap tabular-nums ${isNet ? (loss ? 'font-medium text-critical' : 'font-medium text-ink') : 'text-ink-2'}`}
+                className={`wf-fade absolute -translate-x-1/2 -translate-y-full pb-1.5 font-mono text-chart-label tracking-normal whitespace-nowrap md:text-caption tabular-nums ${isNet ? (loss ? 'font-medium text-critical' : 'font-medium text-ink') : 'text-ink-2'}`}
                 style={{ left: `${i * slot + slot / 2}%`, top: `${y(top)}%`, ...fade }}
               >
                 {s.kind === 'cost'
@@ -88,14 +98,16 @@ export function ProfitWaterfall({ steps, format, formatFull, runKey }: ProfitWat
           )
         })}
       </div>
-      <div aria-hidden="true" className="relative h-11">
+      <div aria-hidden="true" className="relative h-14 md:h-11">
         {steps.map((s, i) => (
           <span
             key={s.label}
-            className={`absolute top-2 w-[14%] -translate-x-1/2 text-center text-caption leading-tight ${i === steps.length - 1 ? 'font-semibold text-ink' : 'text-ink-2'}`}
+            className={`absolute w-[28%] -translate-x-1/2 text-center text-caption leading-tight md:top-2 md:w-[14%] ${i % 2 ? 'top-7' : 'top-2'} ${i === steps.length - 1 ? 'font-semibold text-ink' : 'text-ink-2'}`}
             style={{ left: `${i * slot + slot / 2}%` }}
           >
-            {s.label}
+            <span className="hidden md:inline">{s.label}</span>
+            {/* short names at phone width, where the full ones overlap (UI design: labels shorten) */}
+            <span className="md:hidden">{SHORT[s.label] ?? s.label}</span>
           </span>
         ))}
       </div>

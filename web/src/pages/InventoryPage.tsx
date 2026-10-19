@@ -123,8 +123,10 @@ export function InventoryPage() {
     }
   }, [view, data, picked, filters.range, filters.lowStockDays])
 
-  if (fast.status === 'error') return <ErrorBox error={fast.error} />
-  if (data.status === 'error') return <ErrorBox error={data.error} />
+  if (fast.status === 'error')
+    return <ErrorBox error={fast.error} title="Inventory" what="stock data" />
+  if (data.status === 'error')
+    return <ErrorBox error={data.error} title="Inventory" what="stock data" />
 
   return (
     <>

@@ -148,11 +148,44 @@ export function PageLoadError() {
   )
 }
 
-export function ErrorBox({ error }: { error: Error }) {
-  return (
-    <div role="alert" className="rounded-lg bg-critical-soft px-4 py-3 text-small text-critical">
-      Could not load the dashboard data. {error.message}
+/**
+ * A data file did not load (UI design, error state): the page keeps its title and says what is
+ * missing in plain words, with Try again. The technical detail goes to the console only.
+ */
+export function ErrorBox({
+  error,
+  title,
+  what = 'dashboard data',
+}: {
+  error: Error
+  /** the page's title, kept above the message */
+  title?: string
+  /** what did not load, e.g. "sales data" */
+  what?: string
+}) {
+  useEffect(() => console.warn(error), [error])
+  const box = (
+    <div
+      role="alert"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-critical-soft px-4 py-3 text-small text-critical"
+    >
+      <span>The {what} did not load. Check your connection, then try again.</span>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="inline-flex h-9 items-center rounded-md bg-surface-page px-3 font-semibold text-critical ring-1 ring-critical hover:bg-critical-soft"
+      >
+        Try again
+      </button>
     </div>
+  )
+  return title ? (
+    <>
+      <PageTitle title={title} />
+      {box}
+    </>
+  ) : (
+    box
   )
 }
 

@@ -100,7 +100,8 @@ export function AdvertisingPage() {
     ).filter((t) => t.impressions > 0)
   }, [keywords, filters.range, filters.targetAcos, adFilter])
 
-  if (base.status === 'error') return <ErrorBox error={base.error} />
+  if (base.status === 'error')
+    return <ErrorBox error={base.error} title="Advertising" what="ads data" />
 
   const shown =
     targets && flaggedOnly ? targets.filter((t) => t.noSales || t.acosAboveTarget) : targets
@@ -239,7 +240,7 @@ export function AdvertisingPage() {
       )}
 
       {keywords.status === 'error' ? (
-        <ErrorBox error={keywords.error} />
+        <ErrorBox error={keywords.error} what="keyword data" />
       ) : !shown ? (
         <Loading what="keywords and targets" />
       ) : (
@@ -447,7 +448,7 @@ function AdSummary({
           hint="Ad sales ÷ ad spend"
         />
       </section>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <TrendChart
           title={weekly ? 'ACoS and TACoS, weekly' : 'ACoS and TACoS'}
           dates={chart.dates}

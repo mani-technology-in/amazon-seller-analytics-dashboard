@@ -139,7 +139,8 @@ export function ReportsPage() {
     return { reports, fx, fxReady: d !== null }
   }, [data, filters, m.currency])
 
-  if (data.status === 'error') return <ErrorBox error={data.error} />
+  if (data.status === 'error')
+    return <ErrorBox error={data.error} title="Reports" what="report data" />
 
   const suffix = `${filters.marketplace === 'all' ? 'all' : filters.marketplace.toLowerCase()}-${filters.range.start}-to-${filters.range.end}`
 

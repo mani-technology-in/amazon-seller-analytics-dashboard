@@ -7,6 +7,7 @@ import { DataTable, type Column } from '../components/DataTable'
 import { FilterBar } from '../components/FilterBar'
 import { KpiTile } from '../components/KpiTile'
 import { ErrorBox, Loading, PageTitle } from '../components/Layout'
+import { NoSales } from '../components/NoSales'
 import { SmallMultiples } from '../components/SmallMultiples'
 import { TrendChart } from '../components/TrendChart'
 import type { Manifest, MarketplaceCode } from '../data/types'
@@ -134,7 +135,8 @@ export function SalesPage() {
   }, [slow, filters.range, filters.marketplace])
 
   const data = fast.status === 'error' ? fast : slow
-  if (data.status === 'error') return <ErrorBox error={data.error} />
+  if (data.status === 'error')
+    return <ErrorBox error={data.error} title="Sales" what="sales data" />
 
   const k = view?.kpis
   const p = view?.prev
@@ -206,153 +208,159 @@ export function SalesPage() {
             />
           </section>
 
-          <SmallMultiples
-            title={view.revenue.length > 1 ? 'Revenue by marketplace' : 'Revenue per day'}
-            caption={`Daily · ${cur} · ${days} days`}
-            kind="line"
-            items={view.revenue.map((s) => ({
-              key: s.marketplace,
-              label: MARKETPLACE_NAMES[s.marketplace],
-              total: m.money(s.total),
-              values: s.values,
-              alt: `${MARKETPLACE_NAMES[s.marketplace]} daily revenue, ${days}-day total ${m.money(s.total)}`,
-            }))}
-            note={
-              view.revenue.length > 1
-                ? 'Each chart has its own scale so smaller marketplaces show their shape. France and Mexico opened during the year and are still growing.'
-                : undefined
-            }
-          />
-
-          <DataTable<MarketRow>
-            title="Marketplaces"
-            rows={view.markets}
-            rowKey={(r) => r.marketplace}
-            csvName="marketplaces.csv"
-            initialSort={{ id: 'revenue', desc: true }}
-            columns={
-              [
-                {
-                  id: 'marketplace',
-                  header: 'Marketplace',
-                  value: (r) => r.marketplace,
-                  cell: (r) => (
-                    <>
-                      <span className="inline-block w-8 font-mono text-caption text-ink-3">
-                        {r.marketplace}
-                      </span>
-                      {MARKETPLACE_NAMES[r.marketplace]}
-                    </>
-                  ),
-                },
-                {
-                  id: 'revenue',
-                  header: `Revenue (${cur})`,
-                  value: (r) => r.revenue,
-                  cell: (r) => m.money(r.revenue),
-                  align: 'right',
-                },
-                {
-                  id: 'orders',
-                  header: 'Orders',
-                  value: (r) => r.orders,
-                  cell: (r) => count(r.orders),
-                  align: 'right',
-                },
-                {
-                  id: 'units',
-                  header: 'Units',
-                  value: (r) => r.units,
-                  cell: (r) => count(r.units),
-                  align: 'right',
-                },
-                {
-                  id: 'share',
-                  header: 'Share of revenue',
-                  value: (r) => r.share,
-                  cell: (r) => pct(r.share),
-                  align: 'right',
-                },
-                {
-                  id: 'change',
-                  header: 'Change',
-                  value: (r) => r.change,
-                  cell: (r) =>
-                    r.change === null
-                      ? '–'
-                      : `${r.change > 0 ? '▲ +' : r.change < 0 ? '▼ ' : ''}${pct(r.change)}`,
-                  align: 'right',
-                  hint: 'Revenue against the previous period of the same length',
-                },
-              ] satisfies Column<MarketRow>[]
-            }
-          />
-
-          {!products ? (
-            <Loading what="products" />
+          {k.orders === 0 && k.revenue === 0 ? (
+            <NoSales range={filters.range} update={update} />
           ) : (
-            <DataTable<SalesProductRow>
-              title="Products"
-              rows={products}
-              rowKey={(r) => r.asin}
-              csvName="products.csv"
-              initialSort={{ id: 'sales', desc: true }}
-              columns={
-                [
-                  {
-                    id: 'title',
-                    header: 'Product',
-                    value: (r) => r.title,
-                    cell: (r) => <ProductName row={r} money={m.money} />,
-                  },
-                  {
-                    id: 'units',
-                    header: 'Units',
-                    value: (r) => r.units,
-                    cell: (r) => count(r.units),
-                    align: 'right',
-                  },
-                  {
-                    id: 'sales',
-                    header: `Revenue (${cur})`,
-                    value: (r) => r.sales,
-                    cell: (r) => m.money(r.sales),
-                    align: 'right',
-                  },
-                  {
-                    id: 'sessions',
-                    header: 'Sessions',
-                    value: (r) => r.sessions,
-                    cell: (r) => count(r.sessions),
-                    align: 'right',
-                  },
-                  {
-                    id: 'usp',
-                    header: 'Unit session %',
-                    value: (r) => r.unitSessionPct,
-                    cell: (r) => pct(r.unitSessionPct),
-                    align: 'right',
-                    hint: 'Units ordered ÷ sessions',
-                  },
-                  {
-                    id: 'adSpend',
-                    header: `Ad spend (${cur})`,
-                    value: (r) => r.adSpend,
-                    cell: (r) => m.money(r.adSpend),
-                    align: 'right',
-                    hint: SB_NOTE,
-                  },
-                  {
-                    id: 'tacos',
-                    header: 'TACoS',
-                    value: (r) => r.tacos,
-                    cell: (r) => pct(r.tacos),
-                    align: 'right',
-                    hint: `Ad spend ÷ revenue. ${SB_NOTE}`,
-                  },
-                ] satisfies Column<SalesProductRow>[]
-              }
-            />
+            <>
+              <SmallMultiples
+                title={view.revenue.length > 1 ? 'Revenue by marketplace' : 'Revenue per day'}
+                caption={`Daily · ${cur} · ${days} days`}
+                kind="line"
+                items={view.revenue.map((s) => ({
+                  key: s.marketplace,
+                  label: MARKETPLACE_NAMES[s.marketplace],
+                  total: m.money(s.total),
+                  values: s.values,
+                  alt: `${MARKETPLACE_NAMES[s.marketplace]} daily revenue, ${days}-day total ${m.money(s.total)}`,
+                }))}
+                note={
+                  view.revenue.length > 1
+                    ? 'Each chart has its own scale so smaller marketplaces show their shape. France and Mexico opened during the year and are still growing.'
+                    : undefined
+                }
+              />
+
+              <DataTable<MarketRow>
+                title="Marketplaces"
+                rows={view.markets}
+                rowKey={(r) => r.marketplace}
+                csvName="marketplaces.csv"
+                initialSort={{ id: 'revenue', desc: true }}
+                columns={
+                  [
+                    {
+                      id: 'marketplace',
+                      header: 'Marketplace',
+                      value: (r) => r.marketplace,
+                      cell: (r) => (
+                        <>
+                          <span className="inline-block w-8 font-mono text-caption text-ink-3">
+                            {r.marketplace}
+                          </span>
+                          {MARKETPLACE_NAMES[r.marketplace]}
+                        </>
+                      ),
+                    },
+                    {
+                      id: 'revenue',
+                      header: `Revenue (${cur})`,
+                      value: (r) => r.revenue,
+                      cell: (r) => m.money(r.revenue),
+                      align: 'right',
+                    },
+                    {
+                      id: 'orders',
+                      header: 'Orders',
+                      value: (r) => r.orders,
+                      cell: (r) => count(r.orders),
+                      align: 'right',
+                    },
+                    {
+                      id: 'units',
+                      header: 'Units',
+                      value: (r) => r.units,
+                      cell: (r) => count(r.units),
+                      align: 'right',
+                    },
+                    {
+                      id: 'share',
+                      header: 'Share of revenue',
+                      value: (r) => r.share,
+                      cell: (r) => pct(r.share),
+                      align: 'right',
+                    },
+                    {
+                      id: 'change',
+                      header: 'Change',
+                      value: (r) => r.change,
+                      cell: (r) =>
+                        r.change === null
+                          ? '–'
+                          : `${r.change > 0 ? '▲ +' : r.change < 0 ? '▼ ' : ''}${pct(r.change)}`,
+                      align: 'right',
+                      hint: 'Revenue against the previous period of the same length',
+                    },
+                  ] satisfies Column<MarketRow>[]
+                }
+              />
+
+              {!products ? (
+                <Loading what="products" />
+              ) : (
+                <DataTable<SalesProductRow>
+                  title="Products"
+                  rows={products}
+                  rowKey={(r) => r.asin}
+                  csvName="products.csv"
+                  initialSort={{ id: 'sales', desc: true }}
+                  columns={
+                    [
+                      {
+                        id: 'title',
+                        header: 'Product',
+                        value: (r) => r.title,
+                        cell: (r) => <ProductName row={r} money={m.money} />,
+                      },
+                      {
+                        id: 'units',
+                        header: 'Units',
+                        value: (r) => r.units,
+                        cell: (r) => count(r.units),
+                        align: 'right',
+                      },
+                      {
+                        id: 'sales',
+                        header: `Revenue (${cur})`,
+                        value: (r) => r.sales,
+                        cell: (r) => m.money(r.sales),
+                        align: 'right',
+                      },
+                      {
+                        id: 'sessions',
+                        header: 'Sessions',
+                        value: (r) => r.sessions,
+                        cell: (r) => count(r.sessions),
+                        align: 'right',
+                      },
+                      {
+                        id: 'usp',
+                        header: 'Unit session %',
+                        value: (r) => r.unitSessionPct,
+                        cell: (r) => pct(r.unitSessionPct),
+                        align: 'right',
+                        hint: 'Units ordered ÷ sessions',
+                      },
+                      {
+                        id: 'adSpend',
+                        header: `Ad spend (${cur})`,
+                        value: (r) => r.adSpend,
+                        cell: (r) => m.money(r.adSpend),
+                        align: 'right',
+                        hint: SB_NOTE,
+                      },
+                      {
+                        id: 'tacos',
+                        header: 'TACoS',
+                        value: (r) => r.tacos,
+                        cell: (r) => pct(r.tacos),
+                        align: 'right',
+                        hint: `Ad spend ÷ revenue. ${SB_NOTE}`,
+                      },
+                    ] satisfies Column<SalesProductRow>[]
+                  }
+                />
+              )}
+            </>
           )}
         </>
       )}
@@ -387,7 +395,8 @@ export function ProductDetailPage() {
     }
   }, [data, asin, filters.range])
 
-  if (data.status === 'error') return <ErrorBox error={data.error} />
+  if (data.status === 'error')
+    return <ErrorBox error={data.error} title="Sales" what="sales data" />
   if (!view) return <Loading />
   if (!view.product)
     return (
@@ -473,7 +482,7 @@ export function ProductDetailPage() {
           </ul>
         </section>
       ) : null}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <TrendChart
           title="Revenue and ad spend per day"
           dates={view.dates}
