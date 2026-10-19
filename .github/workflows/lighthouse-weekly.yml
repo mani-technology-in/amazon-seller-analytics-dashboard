@@ -1,0 +1,39 @@
+name: Lighthouse weekly
+
+# Load speed of the live demo, measured with more runs than a pull request can afford, to track
+# LCP over time. Report only for now: a fail line is set once a few weeks of figures exist
+# (MT rule: a new check reports first, then fails from measured numbers).
+
+on:
+  schedule:
+    - cron: "45 3 * * 1" # Mondays 09:15 IST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lighthouse:
+    name: Lighthouse on the live demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SITE: https://demo.manitechnology.com
+      LHCI: "@lhci/cli@0.15.1"
+      LH_RUNS: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Lighthouse, 5 runs per page
+        working-directory: web
+        run: |
+          npx --yes "$LHCI" collect --numberOfRuns="$LH_RUNS" \
+            --url="$SITE/" --url="$SITE/sales" --url="$SITE/inventory" \
+            --url="$SITE/advertising" --url="$SITE/profit" --url="$SITE/reports"
+          npx --yes "$LHCI" upload --target=filesystem --outputDir=lhci
+          node e2e/lighthouse-summary.mjs

@@ -29,6 +29,10 @@ Version 1.1 (change request CR-1): a redesign to match the Amazon section of man
 - New marts `dim_marketplace` and `dim_fx_monthly`; every fact table has a `marketplace` (inventory: `network`) column.
 - The US report files are byte-identical to 1.0.0, and the dashboard's export stays US-only until the new screens, so the live site does not change yet.
 
+### Changed
+
+- CI's deploy checks run as separate jobs side by side (smoke tests per browser, deployment, smoke test of the deployed site, Lighthouse, ZAP) and each runs to the end, with one **Deploy checks** job listing every result: one run now shows every problem, instead of one per run. Lighthouse fails only on figures that are stable between runs (CLS, accessibility, best practices); LCP is a warning, tracked weekly on the live demo. New `make preflight` (every local check, one line each) and `make ci PR=<number>` (a short digest of a CI run).
+
 ### Security
 
 - A **Security** check runs on every pull request: gitleaks (secrets), osv-scanner (dependencies), zizmor (workflows) and Semgrep (code).

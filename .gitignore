@@ -27,3 +27,7 @@ pipeline/output/
 # Playwright
 web/test-results/
 web/playwright-report/
+
+# Lighthouse CI output (local runs and CI)
+web/lhci/
+web/.lighthouseci/
