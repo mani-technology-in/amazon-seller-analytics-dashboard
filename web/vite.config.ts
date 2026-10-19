@@ -5,10 +5,17 @@ import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
 
 /**
- * Preloads the Latin text font from index.html. Without it the browser finds the font only
- * after the CSS, it arrives together with the data files, and the text repaints in it late,
- * which Lighthouse counts as a late LCP.
+ * Preloads the two Latin fonts from index.html. Without it the browser finds a font only after
+ * the CSS, it arrives together with the data files, and the text repaints in it late, which
+ * Lighthouse counts as a late LCP. JetBrains Mono was added after the CR-1 test report (D-2):
+ * on the live demo, runs where it arrived last had LCP render delays of 5.6-9.0 s, against
+ * about 3 s when it came early.
  */
+const PRELOAD_FONTS = [
+  /plus-jakarta-sans-latin-wght-normal-[\w-]+\.woff2$/,
+  /jetbrains-mono-latin-wght-normal-[\w-]+\.woff2$/,
+]
+
 function preloadTextFont(): Plugin {
   return {
     name: 'preload-text-font',
@@ -16,12 +23,11 @@ function preloadTextFont(): Plugin {
     transformIndexHtml: {
       order: 'post',
       handler(_html, ctx) {
-        const font = Object.keys(ctx.bundle ?? {}).find((f) =>
-          /plus-jakarta-sans-latin-wght-normal-[\w-]+\.woff2$/.test(f),
-        )
-        if (!font) throw new Error('preload-text-font: the Plus Jakarta Sans Latin file is missing')
-        return [
-          {
+        const files = Object.keys(ctx.bundle ?? {})
+        return PRELOAD_FONTS.map((pattern) => {
+          const font = files.find((f) => pattern.test(f))
+          if (!font) throw new Error(`preload-text-font: no font file matches ${pattern}`)
+          return {
             tag: 'link',
             attrs: {
               rel: 'preload',
@@ -30,9 +36,9 @@ function preloadTextFont(): Plugin {
               type: 'font/woff2',
               crossorigin: '',
             },
-            injectTo: 'head',
-          },
-        ]
+            injectTo: 'head' as const,
+          }
+        })
       },
     },
   }
