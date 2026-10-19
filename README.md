@@ -45,7 +45,7 @@ PostgreSQL only runs at build time, on your machine or in GitHub Actions. The li
 | `pipeline/export.py` | Writes the marts as JSON files to `web/public/data/` (git-ignored) |
 | `pipeline/sql/` | SQL scripts for the `raw`, `staging` and `marts` schemas |
 | `web/` | React + TypeScript app (Vite, Tailwind CSS), Vitest tests |
-| `web/src/data/` | `DataSource` interface and the static JSON version the demo uses |
+| `web/src/data/` | `DataSource` interface, the static JSON version the demo uses, and the selection layer that joins the chosen marketplaces and converts currency |
 | `web/src/metrics/` | Date ranges and every metric the dashboard shows, with unit and parity tests |
 | `pipeline/parity.py` | The same metrics computed in SQL, for the parity check |
 | `docs/` | Metric definitions, case study and screenshots |
@@ -113,7 +113,7 @@ Each file is loaded into the `raw` schema unchanged (one JSON record per row, wi
 
 Product-level ad spend covers Sponsored Products and Sponsored Display only, because Amazon reports Sponsored Brands spend per campaign. Account totals include all three ad types.
 
-The export writes one compact JSON file per mart (one array per field; Amazon IDs as strings) plus `manifest.json` with the data's date range, `marketplaces.json`, `fx_monthly.json` and `profit_daily.json`. Every file covers all six marketplaces, with a marketplace (inventory: network) column and money in local currency; the dashboard filters and converts to USD itself. Until the pages with the marketplace filter arrive, the pages show the US marketplace, as in v1.0. Opening a page downloads, compressed (gzip level 6, measured with Playwright against a production build on 15 Oct 2026): Overview about 890 KB, Products 770 KB, Inventory 490 KB, Advertising 1,050 KB (code, data and fonts). The data files now hold all six marketplaces while the pages still show the US only; CR-1 PR 6 splits them so each page loads only what it shows.
+The export writes compact JSON files (one array per field; Amazon IDs as strings; money in local currency) plus `manifest.json` with the data's date range. The daily files are split so a page downloads only the marketplaces a visitor picks: `mkt/<code>/` holds one marketplace's sales, ads and profit, `net/<code>/` one fulfilment network's inventory (Germany and France share `net/EU/`), and `overview_daily.json` holds each marketplace's daily totals for the Overview. Shared files: `products.json`, `campaigns.json`, `targets.json`, `marketplaces.json`, `fx_monthly.json`. In the browser, `web/src/data/selection.ts` joins the chosen marketplaces and converts money to USD at each month's rate. Until the filter bar offers a choice, the pages show the US marketplace in USD, as in v1.0. Opening a page downloads, compressed (gzip level 6, measured with Playwright against a production build on 16 Oct 2026): Overview about 590 KB, Products 530 KB, Inventory 300 KB, Advertising 630 KB (code, data and fonts).
 
 ## Metrics
 

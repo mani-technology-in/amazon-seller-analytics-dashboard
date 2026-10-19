@@ -1,4 +1,4 @@
 import { createContext } from 'react'
-import type { DataSource } from '../data/dataSource'
+import type { Datasets } from '../data/selection'
 
-export const DataSourceContext = createContext<DataSource | null>(null)
+export const DataSourceContext = createContext<Datasets | null>(null)

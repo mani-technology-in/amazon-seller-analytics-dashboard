@@ -132,3 +132,14 @@ export interface ProfitDaily {
   /** the seller's own cost (not from Amazon), converted from USD at the month's rate */
   product_cost: number[]
 }
+
+/** Daily totals per marketplace (all products, all ad types), local currency. */
+export interface OverviewDaily {
+  date: ISODate[]
+  marketplace: MarketplaceCode[]
+  sales: number[]
+  orders: number[]
+  units: number[]
+  ad_spend: number[]
+  ad_sales: number[]
+}
