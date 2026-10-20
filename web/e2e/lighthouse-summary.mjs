@@ -28,9 +28,13 @@ function lcpDetail(l) {
     }
   }
   walk(l.audits['network-dependency-tree-insight']?.details?.chains)
-  const last = slowest
-    ? `${new URL(slowest.url).pathname} done at ${Math.round(slowest.navStartToEndTime)} ms`
-    : '?'
+  let path = slowest?.url ?? '?'
+  try {
+    path = new URL(path).pathname
+  } catch {
+    // not an absolute URL: show it as it is
+  }
+  const last = slowest ? `${path} done at ${Math.round(slowest.navStartToEndTime)} ms` : '?'
   return `${node?.selector ?? '?'} [${phases}] last request ${last}`
 }
 
