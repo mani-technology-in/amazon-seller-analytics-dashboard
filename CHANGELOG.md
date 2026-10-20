@@ -2,13 +2,13 @@
 
 All notable changes to this project. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [semantic versions](https://semver.org/).
 
-## [Unreleased]
+## [1.1.0] - 2026-10-20
 
 Version 1.1 (change request CR-1): a redesign to match the Amazon section of manitechnology.com, with Sales, Profit and Reports pages and six marketplaces.
 
 ### Added
 
-- Lighthouse CI on every preview (all six pages as a phone on slow 4G, median of 3 runs; LCP, CLS, accessibility and best-practices budgets fail the check, TBT warns) and an OWASP ZAP baseline scan that fails on any medium-risk alert. Both summarise their results on the run.
+- Lighthouse CI on every preview (all six pages as a phone on slow 4G, median of 3 runs; CLS, accessibility and best-practices budgets fail the check; LCP and TBT warn, and a weekly run tracks LCP on the live demo) and an OWASP ZAP baseline scan that fails on any medium-risk alert. Both summarise their results on the run.
 - Anonymous page views with PostHog EU (no cookies or storage, no session replay, no external scripts), off without the `POSTHOG_KEY` variable and in automated browsers.
 - New README screenshots of all six pages.
 - Profit page (FR-27 to FR-31): Revenue, Amazon fees, Ad spend, Product cost, Net profit and Net margin tiles; the revenue-to-profit chart, which builds left to right, each cost dropping out of revenue 110 ms apart and ending on the net-profit bar (the signature moment; off with Reduce motion; a loss shows below the baseline in red); product and marketplace profit tables with loss flags and a totals row. Product cost is labelled as entered by the seller wherever it shows.
@@ -57,3 +57,6 @@ Version 1.1 (change request CR-1): a redesign to match the Amazon section of man
 ## [1.0.0] - 2026-10-03
 
 First release: Overview, Advertising, Products and Inventory pages over a year of synthetic Amazon-shaped data for one US marketplace, with every metric checked against SQL in CI.
+
+[1.1.0]: https://github.com/mani-technology-in/amazon-seller-analytics-dashboard/releases/tag/v1.1.0
+[1.0.0]: https://github.com/mani-technology-in/amazon-seller-analytics-dashboard/releases/tag/v1.0.0
