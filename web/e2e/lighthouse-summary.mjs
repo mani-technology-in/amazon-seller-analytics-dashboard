@@ -14,6 +14,30 @@ for (const r of manifest) {
   if (!byUrl.has(r.url)) byUrl.set(r.url, [])
   byUrl.get(r.url).push(lhr)
 }
+function lcpDetail(l) {
+  const lists = l.audits['largest-contentful-paint-element']?.details?.items ?? []
+  const node = lists[0]?.items?.[0]?.node
+  const phases = (lists[1]?.items ?? [])
+    .map((p) => `${p.phase ?? p.label}: ${Math.round(p.timing ?? 0)} ms`)
+    .join(', ')
+  let slowest = null
+  const walk = (chains) => {
+    for (const c of Object.values(chains ?? {})) {
+      if (!slowest || c.navStartToEndTime > slowest.navStartToEndTime) slowest = c
+      walk(c.children)
+    }
+  }
+  walk(l.audits['network-dependency-tree-insight']?.details?.chains)
+  let path = slowest?.url ?? '?'
+  try {
+    path = new URL(path).pathname
+  } catch {
+    // not an absolute URL: show it as it is
+  }
+  const last = slowest ? `${path} done at ${Math.round(slowest.navStartToEndTime)} ms` : '?'
+  return `${node?.selector ?? '?'} [${phases}] last request ${last}`
+}
+
 const rows = [...byUrl].map(([url, runs]) => {
   const m = (f) => median(runs.map(f))
   return {
@@ -26,16 +50,9 @@ const rows = [...byUrl].map(([url, runs]) => {
     lcpRuns: runs
       .map((l) => (l.audits['largest-contentful-paint'].numericValue / 1000).toFixed(1))
       .join(', '),
-    // what each run counted as the largest element, to see what holds LCP back
-    lcpElements: [
-      ...new Set(
-        runs.map(
-          (l) =>
-            (l.audits['lcp-breakdown-insight']?.details?.items ?? []).find((i) => i.type === 'node')
-              ?.selector ?? '?',
-        ),
-      ),
-    ].join(' | '),
+    // what each run counted as the largest element, its timing phases and the request that
+    // finished last on the critical path, to see what holds LCP back
+    lcpDetail: runs.map(lcpDetail).join(' || '),
   }
 })
 const table = [
@@ -52,8 +69,9 @@ const table = [
 ].join('\n')
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, table + '\n')
 for (const r of rows) {
+  console.log(`::notice title=Lighthouse LCP detail ${r.page}::${r.lcpDetail.slice(0, 900)}`)
   console.log(
-    `::notice title=Lighthouse ${r.page}::median performance ${r.performance}, accessibility ${r.accessibility}, LCP ${r.lcp} (runs ${r.lcpRuns}; element ${r.lcpElements}), CLS ${r.cls}, TBT ${r.tbt}`,
+    `::notice title=Lighthouse ${r.page}::median performance ${r.performance}, accessibility ${r.accessibility}, LCP ${r.lcp} (runs ${r.lcpRuns}), CLS ${r.cls}, TBT ${r.tbt}`,
   )
 }
 

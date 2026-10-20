@@ -322,10 +322,21 @@ jobs:
           if-no-files-found: ignore
 
   production:
-    name: Check the custom domain (production)
+    name: Check the custom domain (${{ matrix.browser }})
     needs: [build, deploy]
     if: ${{ !cancelled() && needs.deploy.result == 'success' && inputs.branch == 'main' }}
     runs-on: ubuntu-latest
+    # one job per browser, side by side, so main's run stays near 10 minutes (NFR-20)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - browser: chromium
+            projects: --project=chromium --project=android
+          - browser: firefox
+            projects: --project=firefox
+          - browser: webkit
+            projects: --project=webkit --project=iphone
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -334,11 +345,12 @@ jobs:
       - uses: ./.github/actions/web-setup
         with:
           site: site-${{ inputs.branch }}-${{ github.run_attempt }}
-          browser: all
+          browser: ${{ matrix.browser }}
       - name: Smoke test the custom domain
         working-directory: web
         env:
           SMOKE_BASE_URL: ${{ env.PRODUCTION_URL }}
+          PROJECTS: ${{ matrix.projects }}
         run: |
           # The custom domain serves the newest production deployment once Cloudflare has
           # switched over; wait until it serves this build's data before checking it.
@@ -357,11 +369,11 @@ jobs:
             test "$code" = "200"
           done
           # The smoke test also checks the security headers on this domain (NFR-SEC-1).
-          npm run smoke -- --output=test-results/production
+          npm run smoke -- $PROJECTS --output=test-results/production
       - uses: ./.github/actions/smoke-traces
         if: always()
         with:
-          name: traces-production-${{ github.run_attempt }}
+          name: traces-production-${{ matrix.browser }}-${{ github.run_attempt }}
 
   report:
     name: Deploy checks

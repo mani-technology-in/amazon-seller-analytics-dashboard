@@ -160,7 +160,8 @@ export function ProfitPage() {
     [m],
   )
 
-  if (data.status === 'error') return <ErrorBox error={data.error} />
+  if (data.status === 'error')
+    return <ErrorBox error={data.error} title="Profit" what="profit data" />
 
   const a = view?.account
   const p = view?.prev

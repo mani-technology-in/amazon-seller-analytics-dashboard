@@ -385,6 +385,8 @@ test('a table exports CSV', async ({ page }) => {
 })
 
 test('the page never scrolls sideways at phone width @phone', async ({ page }) => {
+  // the narrowest phone in the design (360 px), below the test devices' own widths
+  await page.setViewportSize({ width: 360, height: 780 })
   for (const path of ['/', '/sales', '/inventory', '/advertising', '/profit', '/reports']) {
     await page.goto(path)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()

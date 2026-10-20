@@ -7,6 +7,7 @@ import { DataTable, type Column } from '../components/DataTable'
 import { FilterBar } from '../components/FilterBar'
 import { KpiTile } from '../components/KpiTile'
 import { ErrorBox, Loading, PageTitle } from '../components/Layout'
+import { NoSales } from '../components/NoSales'
 import { SmallMultiples } from '../components/SmallMultiples'
 import { Sparkline } from '../components/Sparkline'
 import { TrendChart } from '../components/TrendChart'
@@ -104,7 +105,8 @@ export function OverviewPage() {
   }, [slow, filters])
 
   const data = fast.status === 'error' ? fast : slow
-  if (data.status === 'error') return <ErrorBox error={data.error} />
+  if (data.status === 'error')
+    return <ErrorBox error={data.error} title="Overview" what="sales data" />
 
   const t = view?.totals
   const p = view?.prev
@@ -165,82 +167,90 @@ export function OverviewPage() {
             />
           </section>
 
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-            <TrendChart
-              title={view.weekly ? 'Revenue against ad spend, weekly' : 'Revenue against ad spend'}
-              dates={view.chart.map((b) => b.start)}
-              series={[
-                { name: 'Revenue', values: view.chart.map((b) => b.revenue) },
-                { name: 'Ad spend', values: view.chart.map((b) => b.adSpend) },
-              ]}
-              format={m.money}
-            />
-            <SmallMultiples
-              title="Units by marketplace"
-              caption={`Weekly · ${days} days`}
-              kind="bars"
-              items={view.units.map((s) => ({
-                key: s.marketplace,
-                label: s.marketplace,
-                total: count(s.total),
-                values: s.values,
-                alt: `${MARKETPLACE_NAMES[s.marketplace]} units per week: ${s.buckets
-                  .map((b, i) => `${dateShort(b.start)} ${count(s.values[i])}`)
-                  .join(', ')}`,
-              }))}
-              note={`Each chart has its own scale; the figure is the ${days}-day total. Bars are whole weeks; the last is the latest.`}
-            />
-          </div>
-
-          {!stockView ? (
-            <Loading what="top products" />
+          {t.orders === 0 && t.revenue === 0 ? (
+            <NoSales range={filters.range} update={update} />
           ) : (
-            <DataTable<TopRow>
-              title="Top 5 products by revenue"
-              rows={stockView.top}
-              rowKey={(r) => r.asin}
-              csvName="top-products.csv"
-              initialSort={{ id: 'revenue', desc: true }}
-              columns={
-                [
-                  {
-                    id: 'title',
-                    header: 'Product',
-                    value: (r) => r.title,
-                    cell: (r) => (
-                      <Link
-                        className="text-accent-strong hover:underline"
-                        to={{ pathname: `/sales/${r.asin}`, search: location.search }}
-                      >
-                        {r.title.replace('Demo Brand ', '')}
-                      </Link>
-                    ),
-                  },
-                  {
-                    id: 'orders',
-                    header: 'Orders',
-                    value: (r) => r.orders,
-                    cell: (r) => count(r.orders),
-                    align: 'right',
-                  },
-                  {
-                    id: 'revenue',
-                    header: `Revenue (${m.currency})`,
-                    value: (r) => r.revenue,
-                    cell: (r) => m.money(r.revenue),
-                    align: 'right',
-                  },
-                  {
-                    id: 'cover',
-                    header: 'Cover',
-                    value: (r) => r.cover,
-                    cell: (r) => cover(r.cover),
-                    align: 'right',
-                    hint: 'Days of stock left at the recent rate of sales, across the chosen fulfilment networks',
-                  },
-                ] satisfies Column<TopRow>[]
-              }
-            />
+            <>
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+                <TrendChart
+                  title={
+                    view.weekly ? 'Revenue against ad spend, weekly' : 'Revenue against ad spend'
+                  }
+                  dates={view.chart.map((b) => b.start)}
+                  series={[
+                    { name: 'Revenue', values: view.chart.map((b) => b.revenue) },
+                    { name: 'Ad spend', values: view.chart.map((b) => b.adSpend) },
+                  ]}
+                  format={m.money}
+                />
+                <SmallMultiples
+                  title="Units by marketplace"
+                  caption={`Weekly · ${days} days`}
+                  kind="bars"
+                  items={view.units.map((s) => ({
+                    key: s.marketplace,
+                    label: s.marketplace,
+                    total: count(s.total),
+                    values: s.values,
+                    alt: `${MARKETPLACE_NAMES[s.marketplace]} units per week: ${s.buckets
+                      .map((b, i) => `${dateShort(b.start)} ${count(s.values[i])}`)
+                      .join(', ')}`,
+                  }))}
+                  note={`Each chart has its own scale; the figure is the ${days}-day total. Bars are whole weeks; the last is the latest.`}
+                />
+              </div>
+
+              {!stockView ? (
+                <Loading what="top products" />
+              ) : (
+                <DataTable<TopRow>
+                  title="Top 5 products by revenue"
+                  rows={stockView.top}
+                  rowKey={(r) => r.asin}
+                  csvName="top-products.csv"
+                  initialSort={{ id: 'revenue', desc: true }}
+                  columns={
+                    [
+                      {
+                        id: 'title',
+                        header: 'Product',
+                        value: (r) => r.title,
+                        cell: (r) => (
+                          <Link
+                            className="text-accent-strong hover:underline"
+                            to={{ pathname: `/sales/${r.asin}`, search: location.search }}
+                          >
+                            {r.title.replace('Demo Brand ', '')}
+                          </Link>
+                        ),
+                      },
+                      {
+                        id: 'orders',
+                        header: 'Orders',
+                        value: (r) => r.orders,
+                        cell: (r) => count(r.orders),
+                        align: 'right',
+                      },
+                      {
+                        id: 'revenue',
+                        header: `Revenue (${m.currency})`,
+                        value: (r) => r.revenue,
+                        cell: (r) => m.money(r.revenue),
+                        align: 'right',
+                      },
+                      {
+                        id: 'cover',
+                        header: 'Cover',
+                        value: (r) => r.cover,
+                        cell: (r) => cover(r.cover),
+                        align: 'right',
+                        hint: 'Days of stock left at the recent rate of sales, across the chosen fulfilment networks',
+                      },
+                    ] satisfies Column<TopRow>[]
+                  }
+                />
+              )}
+            </>
           )}
         </>
       )}
